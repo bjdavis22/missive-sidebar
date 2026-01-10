@@ -7,13 +7,26 @@
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       padding: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    h3 {
+      margin-top: 16px;
+      font-size: 14px;
     }
     pre {
-      background: #f5f5f5;
+      background: #f4f4f4;
       padding: 8px;
-      border-radius: 4px;
-      white-space: pre-wrap;
-      word-break: break-word;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .label {
+      font-weight: 600;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -21,40 +34,60 @@
 <body>
   <h1>Missive Sidebar</h1>
 
-  <p><strong>Conversation ID:</strong></p>
+  <div class="label">Conversation ID:</div>
   <pre id="conversation">Not provided</pre>
 
-  <p><strong>Message ID:</strong></p>
+  <div class="label">Message ID:</div>
   <pre id="message">Not provided</pre>
 
-  <p><strong>Account ID:</strong></p>
+  <div class="label">Account ID:</div>
   <pre id="account">Not provided</pre>
 
   <h3>Debug payload</h3>
   <pre id="debug">Waiting for message…</pre>
 
   <script>
-    function set(id, value) {
-      document.getElementById(id).textContent = value || "Not provided";
+    // --- State ---
+    const state = {
+      conversationId: null,
+      messageId: null,
+      accountId: null
+    };
+
+    function updateUI() {
+      document.getElementById("conversation").textContent =
+        state.conversationId || "Not provided";
+      document.getElementById("message").textContent =
+        state.messageId || "Not provided";
+      document.getElementById("account").textContent =
+        state.accountId || "Not provided";
     }
 
-    // 🔑 REQUIRED: tell Missive we are ready
-    window.parent.postMessage({ type: "ready" }, "*");
+    // --- Handshake: tell Missive we are ready ---
+    window.parent.postMessage(
+      { type: "missive:ready" },
+      "*"
+    );
 
-    // Listen for Missive context
+    // --- Listen for messages from Missive ---
     window.addEventListener("message", (event) => {
       const data = event.data;
 
-      console.log("RAW MESSAGE FROM MISSIVE:", data);
+      // Show everything we receive
       document.getElementById("debug").textContent =
         JSON.stringify(data, null, 2);
 
-      if (!data || data.type !== "context") return;
+      if (!data || data.type !== "missive:context") return;
 
-      set("conversation", data.conversation?.id);
-      set("message", data.message?.id);
-      set("account", data.account?.id);
+      state.conversationId = data.conversation?.id || null;
+      state.messageId = data.message?.id || null;
+      state.accountId = data.account?.id || null;
+
+      updateUI();
     });
+
+    // Initial render
+    updateUI();
   </script>
 </body>
 </html>
