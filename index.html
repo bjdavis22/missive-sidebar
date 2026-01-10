@@ -38,7 +38,22 @@
 <p><strong>Message ID:</strong> <span id="message"></span></p>
 <p><strong>Account ID:</strong> <span id="account"></span></p>
 
+<script>
+  window.addEventListener("message", (event) => {
+    console.log("RAW MESSAGE FROM MISSIVE:", event.data);
+
+    // Show something immediately so we know messages are flowing
+    document.getElementById("debug").textContent =
+      JSON.stringify(event.data, null, 2);
+  });
+</script>
+
+
 <body>
+
+  <h3>Debug payload</h3>
+<pre id="debug">Waiting for message…</pre>
+
   <h1>Missive Sidebar</h1>
 
   <p><strong>Conversation ID:</strong></p>
