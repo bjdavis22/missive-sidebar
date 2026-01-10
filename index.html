@@ -3,91 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <title>Missive Sidebar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       padding: 12px;
-      font-size: 14px;
-      line-height: 1.4;
+      margin: 0;
+      background: #fff;
+      color: #111;
     }
     h1 {
-      font-size: 18px;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .row {
       margin-bottom: 8px;
-    }
-    h3 {
-      margin-top: 16px;
-      font-size: 14px;
-    }
-    pre {
-      background: #f4f4f4;
-      padding: 8px;
-      border-radius: 6px;
-      overflow-x: auto;
     }
     .label {
       font-weight: 600;
-      margin-top: 8px;
+    }
+    pre {
+      background: #f6f8fa;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      overflow: auto;
     }
   </style>
 </head>
-
 <body>
   <h1>Missive Sidebar</h1>
 
-  <div class="label">Conversation ID:</div>
-  <pre id="conversation">Not provided</pre>
+  <div class="row">
+    <span class="label">Conversation ID:</span>
+    <span id="conversationId">Waiting…</span>
+  </div>
 
-  <div class="label">Message ID:</div>
-  <pre id="message">Not provided</pre>
+  <div class="row">
+    <span class="label">Message ID:</span>
+    <span id="messageId">Waiting…</span>
+  </div>
 
-  <div class="label">Account ID:</div>
-  <pre id="account">Not provided</pre>
+  <div class="row">
+    <span class="label">Account ID:</span>
+    <span id="accountId">Waiting…</span>
+  </div>
 
-  <h3>Debug payload</h3>
-  <pre id="debug">Waiting for message…</pre>
+  <h2>Debug payload</h2>
+  <pre id="payload">Waiting for message…</pre>
 
   <script>
-    // --- State ---
-    const state = {
-      conversationId: null,
-      messageId: null,
-      accountId: null
-    };
-
-    function updateUI() {
-      document.getElementById("conversation").textContent =
-        state.conversationId || "Not provided";
-      document.getElementById("message").textContent =
-        state.messageId || "Not provided";
-      document.getElementById("account").textContent =
-        state.accountId || "Not provided";
-    }
-
-    // --- Handshake: tell Missive we are ready ---
-    window.parent.postMessage(
-      { type: "missive:ready" },
-      "*"
-    );
-
-    // --- Listen for messages from Missive ---
     window.addEventListener("message", (event) => {
       const data = event.data;
 
-      // Show everything we receive
-      document.getElementById("debug").textContent =
+      document.getElementById("payload").textContent =
         JSON.stringify(data, null, 2);
 
-      if (!data || data.type !== "missive:context") return;
+      if (data.conversation?.id) {
+        document.getElementById("conversationId").textContent =
+          data.conversation.id;
+      }
 
-      state.conversationId = data.conversation?.id || null;
-      state.messageId = data.message?.id || null;
-      state.accountId = data.account?.id || null;
+      if (data.message?.id) {
+        document.getElementById("messageId").textContent =
+          data.message.id;
+      }
 
-      updateUI();
+      if (data.account?.id) {
+        document.getElementById("accountId").textContent =
+          data.account.id;
+      }
     });
-
-    // Initial render
-    updateUI();
   </script>
 </body>
 </html>
