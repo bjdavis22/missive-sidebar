@@ -1,3 +1,43 @@
+<script>
+  let state = {
+    conversationId: null,
+    messageId: null,
+    accountId: null
+  };
+
+  function updateUI() {
+    document.getElementById("conversation").textContent =
+      state.conversationId || "Not provided";
+    document.getElementById("message").textContent =
+      state.messageId || "Not provided";
+    document.getElementById("account").textContent =
+      state.accountId || "Not provided";
+  }
+
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+
+    // Missive sends multiple events; we only care about context
+    if (!data || !data.type) return;
+
+    if (data.type === "missive:context") {
+      state.conversationId = data.conversation?.id || null;
+      state.messageId = data.message?.id || null;
+      state.accountId = data.account?.id || null;
+
+      console.log("Missive context received:", data);
+      updateUI();
+    }
+  });
+
+  // Initial render
+  updateUI();
+</script>
+
+<p><strong>Conversation ID:</strong> <span id="conversation"></span></p>
+<p><strong>Message ID:</strong> <span id="message"></span></p>
+<p><strong>Account ID:</strong> <span id="account"></span></p>
+
 <body>
   <h1>Missive Sidebar</h1>
 
