@@ -32,29 +32,44 @@
   <p><strong>ID:</strong> <span id="account">Waiting…</span></p>
 
   <h3>Raw context</h3>
-  <pre id="debug">Waiting for context…</pre>
+  <pre id="debug">Waiting for Missive…</pre>
 
   <script>
-    if (!window.Missive) {
-      document.getElementById("debug").textContent =
-        "Missive SDK not detected. This page must be loaded inside Missive.";
-    } else {
-      Missive.on("context", (ctx) => {
-        console.log("Missive context:", ctx);
+    function setDebug(text) {
+      document.getElementById("debug").textContent = text;
+    }
 
-        document.getElementById("debug").textContent =
-          JSON.stringify(ctx, null, 2);
+    function update(ctx) {
+      document.getElementById("conversation").textContent =
+        ctx.conversation?.id || "Not provided";
 
-        document.getElementById("conversation").textContent =
-          ctx.conversation?.id || "Not provided";
+      document.getElementById("message").textContent =
+        ctx.message?.id || "Not provided";
 
-        document.getElementById("message").textContent =
-          ctx.message?.id || "Not provided";
+      document.getElementById("account").textContent =
+        ctx.account?.id || "Not provided";
 
-        document.getElementById("account").textContent =
-          ctx.account?.id || "Not provided";
+      setDebug(JSON.stringify(ctx, null, 2));
+    }
+
+    // Wait for Missive SDK readiness (this is the missing piece)
+    function waitForMissive() {
+      if (!window.Missive || !Missive.ready) {
+        setTimeout(waitForMissive, 50);
+        return;
+      }
+
+      Missive.ready.then(() => {
+        setDebug("Missive ready. Waiting for context…");
+
+        Missive.on("context", (ctx) => {
+          console.log("Missive context:", ctx);
+          update(ctx);
+        });
       });
     }
+
+    waitForMissive();
   </script>
 </body>
 </html>
