@@ -2,144 +2,115 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Missive Sidebar</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Missive iframe JS API -->
-  <script src="https://integrations.missiveapp.com/missive.js"></script>
-
+  <title>Missive Sidebar – Drafts + Messages</title>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       padding: 12px;
-      margin: 0;
-      background: #fff;
-      color: #111;
+      font-size: 14px;
     }
-    h1 {
-      font-size: 16px;
-      margin-bottom: 12px;
+    h2 {
+      margin-top: 0;
     }
-    .row {
-      margin-bottom: 8px;
-    }
-    .label {
-      font-weight: 600;
-    }
-    pre {
-      background: #f6f8fa;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      overflow: auto;
+    h3 {
+      margin-bottom: 6px;
+      margin-top: 16px;
     }
     button {
-      margin-right: 8px;
-      margin-top: 8px;
+      display: block;
+      margin: 4px 0;
       padding: 6px 10px;
       font-size: 13px;
       cursor: pointer;
     }
+    .muted {
+      color: #666;
+      font-size: 12px;
+    }
+    .item {
+      margin-bottom: 6px;
+    }
   </style>
 </head>
 <body>
-  <h1>Missive Sidebar</h1>
 
-  <div class="row">
-    <span class="label">Conversation ID:</span>
-    <span id="conversationId">Waiting…</span>
-  </div>
+  <h2>Missive Sidebar Integration</h2>
+  <p class="muted">Read-only</p>
 
-  <div class="row">
-    <span class="label">Subject:</span>
-    <span id="subject">–</span>
-  </div>
+  <h3>Drafts</h3>
+  <div id="drafts">Waiting for conversation…</div>
 
-  <div class="row">
-    <span class="label">Missive Link:</span>
-    <span id="link">–</span>
-  </div>
-
-  <div class="row">
-    <button id="copyLink" disabled>Copy Missive Link</button>
-    <button id="sendToDrafts" disabled>Send to Drafts</button>
-  </div>
-
-  <h2>Debug (conversation subset)</h2>
-  <pre id="payload">Waiting for conversation…</pre>
+  <h3>Missive Messages</h3>
+  <div id="messages">Waiting for conversation…</div>
 
   <script>
-    let currentConversation = null;
+    const draftsContainer = document.getElementById("drafts");
+    const messagesContainer = document.getElementById("messages");
 
-    function updateUI(conversation) {
-      currentConversation = conversation;
-
-      document.getElementById("conversationId").textContent =
-        conversation.id || "–";
-
-      document.getElementById("subject").textContent =
-        conversation.subject || "–";
-
-      document.getElementById("link").textContent =
-        conversation.link || "–";
-
-      document.getElementById("payload").textContent =
-        JSON.stringify(
-          {
-            id: conversation.id,
-            subject: conversation.subject,
-            link: conversation.link
-          },
-          null,
-          2
-        );
-
-      document.getElementById("copyLink").disabled = false;
-      document.getElementById("sendToDrafts").disabled = false;
+    function extractDraftLinks(text) {
+      if (!text) return [];
+      const regex = /drafts:\/\/[^\s"'<>]+/g;
+      return text.match(regex) || [];
     }
 
-    // Listen for conversation changes
-    Missive.on("change:conversations", (conversationIds) => {
-      if (!conversationIds || conversationIds.length === 0) return;
+    function renderDrafts(draftLinks) {
+      draftsContainer.innerHTML = "";
 
-      Missive.fetchConversations(conversationIds).then((conversations) => {
-        if (conversations && conversations.length > 0) {
-          updateUI(conversations[0]);
-        }
+      if (draftLinks.length === 0) {
+        draftsContainer.textContent = "No Drafts links found.";
+        return;
+      }
+
+      draftLinks.forEach((url, index) => {
+        const btn = document.createElement("button");
+        btn.textContent = `Open Draft ${index + 1}`;
+        btn.onclick = () => Missive.openExternal(url);
+        draftsContainer.appendChild(btn);
       });
-    });
+    }
 
-    // Copy Missive link
-    document.getElementById("copyLink").addEventListener("click", () => {
-      if (!currentConversation?.link) return;
+    function renderMessages(messages, conversationId) {
+      messagesContainer.innerHTML = "";
 
-      navigator.clipboard.writeText(currentConversation.link).then(() => {
-        alert("Missive link copied to clipboard");
+      messages.forEach((msg, index) => {
+        const btn = document.createElement("button");
+        btn.textContent = `Open Message ${index + 1}`;
+        btn.onclick = () => {
+          const link = `missive://conversation/${conversationId}?message=${msg.id}`;
+          Missive.openExternal(link);
+        };
+        messagesContainer.appendChild(btn);
       });
-    });
+    }
 
-    // Send to Drafts
-    document.getElementById("sendToDrafts").addEventListener("click", () => {
-      if (!currentConversation) return;
+    // Listen for Missive context
+    Missive.on("context", async (context) => {
+      if (!context.conversation || !context.conversation.id) {
+        draftsContainer.textContent = "No conversation context.";
+        messagesContainer.textContent = "No conversation context.";
+        return;
+      }
 
-      const title =
-        currentConversation.subject || "Missive Conversation";
+      const conversationId = context.conversation.id;
 
-      const body =
-        title +
-        "\n\n---\n\n" +
-        "Missive:\n" +
-        currentConversation.link +
-        "\n\nConversation ID:\n" +
-        currentConversation.id;
+      // Fetch full conversation
+      const convo = await Missive.fetchConversation(conversationId);
+      const messages = convo.messages || [];
 
-      const draftsURL =
-        "drafts://x-callback-url/create" +
-        "?title=" + encodeURIComponent(title) +
-        "&text=" + encodeURIComponent(body);
+      // Extract Drafts links
+      let draftLinks = [];
+      messages.forEach(msg => {
+        const text = msg.body || "";
+        draftLinks.push(...extractDraftLinks(text));
+      });
 
-      window.location.href = draftsURL;
+      // De-dupe
+      draftLinks = [...new Set(draftLinks)];
+
+      renderDrafts(draftLinks);
+      renderMessages(messages, conversationId);
     });
   </script>
+
 </body>
 </html>
