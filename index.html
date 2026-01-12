@@ -33,6 +33,13 @@
       font-size: 12px;
       overflow: auto;
     }
+    button {
+      margin-right: 8px;
+      margin-top: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -49,44 +56,89 @@
   </div>
 
   <div class="row">
-    <span class="label">Participants:</span>
-    <span id="participants">–</span>
+    <span class="label">Missive Link:</span>
+    <span id="link">–</span>
   </div>
 
-  <h2>Debug payload</h2>
+  <div class="row">
+    <button id="copyLink" disabled>Copy Missive Link</button>
+    <button id="sendToDrafts" disabled>Send to Drafts</button>
+  </div>
+
+  <h2>Debug (conversation subset)</h2>
   <pre id="payload">Waiting for conversation…</pre>
 
   <script>
-    function updateConversation(conversation) {
+    let currentConversation = null;
+
+    function updateUI(conversation) {
+      currentConversation = conversation;
+
       document.getElementById("conversationId").textContent =
         conversation.id || "–";
 
       document.getElementById("subject").textContent =
         conversation.subject || "–";
 
-      if (conversation.participants) {
-        document.getElementById("participants").textContent =
-          conversation.participants
-            .map(p => p.email || p.name || p.id)
-            .join(", ");
-      } else {
-        document.getElementById("participants").textContent = "–";
-      }
+      document.getElementById("link").textContent =
+        conversation.link || "–";
 
       document.getElementById("payload").textContent =
-        JSON.stringify(conversation, null, 2);
+        JSON.stringify(
+          {
+            id: conversation.id,
+            subject: conversation.subject,
+            link: conversation.link
+          },
+          null,
+          2
+        );
+
+      document.getElementById("copyLink").disabled = false;
+      document.getElementById("sendToDrafts").disabled = false;
     }
 
-    // Fired whenever the selected conversation changes
+    // Listen for conversation changes
     Missive.on("change:conversations", (conversationIds) => {
       if (!conversationIds || conversationIds.length === 0) return;
 
-      // Fetch full conversation objects
       Missive.fetchConversations(conversationIds).then((conversations) => {
         if (conversations && conversations.length > 0) {
-          updateConversation(conversations[0]);
+          updateUI(conversations[0]);
         }
       });
+    });
+
+    // Copy Missive link
+    document.getElementById("copyLink").addEventListener("click", () => {
+      if (!currentConversation?.link) return;
+
+      navigator.clipboard.writeText(currentConversation.link).then(() => {
+        alert("Missive link copied to clipboard");
+      });
+    });
+
+    // Send to Drafts
+    document.getElementById("sendToDrafts").addEventListener("click", () => {
+      if (!currentConversation) return;
+
+      const title =
+        currentConversation.subject || "Missive Conversation";
+
+      const body =
+        title +
+        "\n\n---\n\n" +
+        "Missive:\n" +
+        currentConversation.link +
+        "\n\nConversation ID:\n" +
+        currentConversation.id;
+
+      const draftsURL =
+        "drafts://x-callback-url/create" +
+        "?title=" + encodeURIComponent(title) +
+        "&text=" + encodeURIComponent(body);
+
+      window.location.href = draftsURL;
     });
   </script>
 </body>
