@@ -5,6 +5,9 @@
   <title>Missive Sidebar</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+  <!-- Missive iframe JS API -->
+  <script src="https://integrations.missiveapp.com/missive.js"></script>
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -41,39 +44,49 @@
   </div>
 
   <div class="row">
-    <span class="label">Message ID:</span>
-    <span id="messageId">Waiting…</span>
+    <span class="label">Subject:</span>
+    <span id="subject">–</span>
   </div>
 
   <div class="row">
-    <span class="label">Account ID:</span>
-    <span id="accountId">Waiting…</span>
+    <span class="label">Participants:</span>
+    <span id="participants">–</span>
   </div>
 
   <h2>Debug payload</h2>
-  <pre id="payload">Waiting for message…</pre>
+  <pre id="payload">Waiting for conversation…</pre>
 
   <script>
-    window.addEventListener("message", (event) => {
-      const data = event.data;
+    function updateConversation(conversation) {
+      document.getElementById("conversationId").textContent =
+        conversation.id || "–";
+
+      document.getElementById("subject").textContent =
+        conversation.subject || "–";
+
+      if (conversation.participants) {
+        document.getElementById("participants").textContent =
+          conversation.participants
+            .map(p => p.email || p.name || p.id)
+            .join(", ");
+      } else {
+        document.getElementById("participants").textContent = "–";
+      }
 
       document.getElementById("payload").textContent =
-        JSON.stringify(data, null, 2);
+        JSON.stringify(conversation, null, 2);
+    }
 
-      if (data.conversation?.id) {
-        document.getElementById("conversationId").textContent =
-          data.conversation.id;
-      }
+    // Fired whenever the selected conversation changes
+    Missive.on("change:conversations", (conversationIds) => {
+      if (!conversationIds || conversationIds.length === 0) return;
 
-      if (data.message?.id) {
-        document.getElementById("messageId").textContent =
-          data.message.id;
-      }
-
-      if (data.account?.id) {
-        document.getElementById("accountId").textContent =
-          data.account.id;
-      }
+      // Fetch full conversation objects
+      Missive.fetchConversations(conversationIds).then((conversations) => {
+        if (conversations && conversations.length > 0) {
+          updateConversation(conversations[0]);
+        }
+      });
     });
   </script>
 </body>
