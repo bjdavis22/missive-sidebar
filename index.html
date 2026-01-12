@@ -15,9 +15,6 @@
       font-size: 12px;
       overflow-x: auto;
     }
-    h3 {
-      margin-top: 20px;
-    }
   </style>
 </head>
 
@@ -34,36 +31,30 @@
   <h3>Account</h3>
   <p><strong>ID:</strong> <span id="account">Waiting…</span></p>
 
-  <h3>Raw payload (debug)</h3>
-  <pre id="debug">Waiting for message…</pre>
+  <h3>Raw context</h3>
+  <pre id="debug">Waiting for context…</pre>
 
   <script>
-    window.addEventListener("message", (event) => {
-      // Always log everything first
-      console.log("MISSIVE MESSAGE:", event.data);
-
+    if (!window.Missive) {
       document.getElementById("debug").textContent =
-        JSON.stringify(event.data, null, 2);
+        "Missive SDK not detected. This page must be loaded inside Missive.";
+    } else {
+      Missive.on("context", (ctx) => {
+        console.log("Missive context:", ctx);
 
-      const data = event.data;
-      if (!data) return;
+        document.getElementById("debug").textContent =
+          JSON.stringify(ctx, null, 2);
 
-      // Extract defensively
-      if (data.conversation && data.conversation.id) {
         document.getElementById("conversation").textContent =
-          data.conversation.id;
-      }
+          ctx.conversation?.id || "Not provided";
 
-      if (data.message && data.message.id) {
         document.getElementById("message").textContent =
-          data.message.id;
-      }
+          ctx.message?.id || "Not provided";
 
-      if (data.account && data.account.id) {
         document.getElementById("account").textContent =
-          data.account.id;
-      }
-    });
+          ctx.account?.id || "Not provided";
+      });
+    }
   </script>
 </body>
 </html>
