@@ -13,9 +13,14 @@
       font-size: 14px;
       color: #111;
     }
+
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
-    .muted { font-size: 12px; color: #666; }
+
+    .muted {
+      font-size: 12px;
+      color: #666;
+    }
 
     .message {
       border-top: 1px solid #eee;
@@ -27,26 +32,30 @@
       color: #2563eb;
       text-decoration: none;
       font-size: 13px;
-      word-break: break-all;
     }
-    a:hover { text-decoration: underline; }
+
+    a:hover {
+      text-decoration: underline;
+    }
 
     details {
       margin-top: 6px;
-      margin-left: 10px;
     }
+
     summary {
       cursor: pointer;
       font-size: 12px;
       color: #444;
     }
 
-    ul {
-      margin: 6px 0 0 14px;
-      padding: 0;
+    .links {
+      margin-top: 4px;
+      padding-left: 12px;
     }
-    li {
-      margin-bottom: 4px;
+
+    .links a {
+      display: block;
+      word-break: break-all;
       font-size: 12px;
     }
 
@@ -64,7 +73,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · Links in toggles</div>
+<div class="muted">Baseline ordering preserved · Link extraction added</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -86,21 +95,20 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
-  function extractLinks(html) {
+  function extractLinksFromText(text) {
     const drafts = [];
     const web = [];
 
-    if (!html) return { drafts, web };
+    if (!text) return { drafts, web };
 
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    doc.querySelectorAll("a[href]").forEach(a => {
-      const href = a.getAttribute("href");
-      if (!href) return;
+    const urlRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
+    const matches = text.match(urlRegex) || [];
 
-      if (href.startsWith("drafts://")) {
-        drafts.push(href);
-      } else if (href.startsWith("http://") || href.startsWith("https://")) {
-        web.push(href);
+    matches.forEach(url => {
+      if (url.startsWith("drafts://")) {
+        drafts.push(url);
+      } else {
+        web.push(url);
       }
     });
 
@@ -126,7 +134,9 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔒 BASELINE — DO NOT CHANGE --
+    // 🔑 BASELINE (do not touch):
+    // SDK provides oldest → newest
+    // Reverse ONCE and USE the reversed array
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -135,34 +145,11 @@
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const { drafts, web } = extractLinks(msg.body_html);
-
-      let linksHtml = "";
-
-      if (drafts.length > 0) {
-        linksHtml += `
-          <details>
-            <summary>Drafts links (${drafts.length})</summary>
-            <ul>
-              ${drafts.map(l => `<li><a href="${l}">${l}</a></li>`).join("")}
-            </ul>
-          </details>
-        `;
-      }
-
-      if (web.length > 0) {
-        linksHtml += `
-          <details>
-            <summary>Web links (${web.length})</summary>
-            <ul>
-              ${web.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join("")}
-            </ul>
-          </details>
-        `;
-      }
+      const { drafts, web } = extractLinksFromText(msg.body);
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
+
       msgDiv.innerHTML = `
         <div class="muted">
           Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
@@ -172,8 +159,29 @@
             Open message in Missive →
           </a>
         </div>
-        ${linksHtml}
       `;
+
+      if (drafts.length > 0) {
+        const d = document.createElement("details");
+        d.innerHTML = `
+          <summary>Drafts links (${drafts.length})</summary>
+          <div class="links">
+            ${drafts.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")}
+          </div>
+        `;
+        msgDiv.appendChild(d);
+      }
+
+      if (web.length > 0) {
+        const d = document.createElement("details");
+        d.innerHTML = `
+          <summary>Web links (${web.length})</summary>
+          <div class="links">
+            ${web.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")}
+          </div>
+        `;
+        msgDiv.appendChild(d);
+      }
 
       messagesEl.appendChild(msgDiv);
     });
