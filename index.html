@@ -18,21 +18,44 @@
     .muted { font-size: 12px; color: #666; }
     .message {
       border-top: 1px solid #eee;
-      padding-top: 6px;
-      margin-top: 6px;
+      padding-top: 8px;
+      margin-top: 8px;
     }
-    .links {
-      margin-top: 4px;
-      padding-left: 12px;
-    }
-    .links a {
-      display: block;
-      font-size: 12px;
+    a {
       color: #2563eb;
       text-decoration: none;
+      font-size: 13px;
       word-break: break-all;
     }
-    .links a:hover { text-decoration: underline; }
+    a:hover { text-decoration: underline; }
+
+    details {
+      margin-top: 6px;
+      background: #f9fafb;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: #374151;
+    }
+    ul {
+      padding-left: 16px;
+      margin: 6px 0 0;
+    }
+    li {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .tag {
+      font-size: 11px;
+      background: #e5e7eb;
+      padding: 2px 6px;
+      border-radius: 999px;
+      margin-left: 6px;
+      color: #374151;
+    }
     pre {
       background: #f6f8fa;
       padding: 8px;
@@ -60,24 +83,29 @@
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">
-  Newest → Oldest (baseline preserved)
-</div>
+<div class="muted">Newest → Oldest (baseline preserved)</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
 <pre id="payload">Waiting…</pre>
 
 <script>
-  function extractLinks(text) {
-    if (!text) return [];
-    const urlRegex = /https?:\/\/[^\s<>"']+/gi;
-    return Array.from(new Set(text.match(urlRegex) || []));
+  function extractLinks(text = "") {
+    const urls = new Set();
+
+    // HTTP / HTTPS
+    const httpRegex = /\bhttps?:\/\/[^\s<>"')]+/gi;
+    (text.match(httpRegex) || []).forEach(u => urls.add(u));
+
+    // Missive drafts (callback or drafts://)
+    const draftRegex = /\bdrafts:\/\/[^\s<>"')]+|\[Drafts\]\([^)]+\)/gi;
+    (text.match(draftRegex) || []).forEach(u => urls.add(u));
+
+    return [...urls];
   }
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
-
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -94,23 +122,18 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔒 BASELINE: newest → oldest (derived from timestamps)
-    const messages = [...conversation.messages].sort((a, b) => {
-      const ta = new Date(a.created_at || a.sent_at || 0).getTime();
-      const tb = new Date(b.created_at || b.sent_at || 0).getTime();
-      return tb - ta;
-    });
+    // ✅ BASELINE — DO NOT TOUCH (this is the working order)
+    const displayMessages = [...conversation.messages];
 
-    messages.forEach((msg, index) => {
+    displayMessages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const content =
-        msg.body || msg.text || msg.preview || "";
-
-      const links = extractLinks(content);
+      const links = extractLinks(msg.body || "");
+      const draftLinks = links.filter(l => l.includes("draft"));
+      const otherLinks = links.filter(l => !l.includes("draft"));
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
@@ -119,18 +142,23 @@
         <div class="muted">
           Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
         </div>
+
         <div>
-          <a href="${msgUrl}" target="_blank">
-            Open message in Missive →
-          </a>
+          <a href="${msgUrl}" target="_blank">Open message in Missive →</a>
         </div>
-        <div class="links">
-          ${
-            links.length
-              ? links.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")
-              : `<div class="muted">No links found</div>`
-          }
-        </div>
+
+        ${links.length ? `
+          <details>
+            <summary>
+              Links (${links.length})
+              ${draftLinks.length ? `<span class="tag">${draftLinks.length} drafts</span>` : ""}
+            </summary>
+            <ul>
+              ${draftLinks.map(l => `<li>📝 <a href="${l}" target="_blank">${l}</a></li>`).join("")}
+              ${otherLinks.map(l => `<li>🔗 <a href="${l}" target="_blank">${l}</a></li>`).join("")}
+            </ul>
+          </details>
+        ` : ""}
       `;
 
       messagesEl.appendChild(msgDiv);
