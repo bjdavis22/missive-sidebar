@@ -15,156 +15,123 @@
       margin: 0;
       background: #fff;
       color: #111;
-      font-size: 14px;
     }
+
     h1 {
       font-size: 16px;
       margin-bottom: 4px;
     }
+
     h2 {
       font-size: 14px;
-      margin-top: 16px;
-      margin-bottom: 6px;
+      margin: 16px 0 6px;
     }
+
     .muted {
       color: #666;
       font-size: 12px;
+      margin-bottom: 12px;
     }
-    .row {
+
+    .block {
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    ul {
+      padding-left: 16px;
+      margin: 6px 0;
+    }
+
+    li {
       margin-bottom: 6px;
     }
-    .message {
-      border-top: 1px solid #eee;
-      padding-top: 8px;
-      margin-top: 8px;
-    }
+
     a {
       color: #2563eb;
       text-decoration: none;
     }
-    button {
-      margin-top: 4px;
-      padding: 4px 8px;
-      font-size: 12px;
-      cursor: pointer;
+
+    a:hover {
+      text-decoration: underline;
     }
+
     pre {
       background: #f6f8fa;
       padding: 8px;
       border-radius: 4px;
       font-size: 11px;
       overflow: auto;
-      max-height: 200px;
     }
   </style>
 </head>
-<body>
 
+<body>
   <h1>Missive Sidebar Integration</h1>
   <div class="muted">Read-only</div>
 
-  <h2>Conversation</h2>
-  <div class="row">
-    <strong>ID:</strong>
-    <span id="conversationId">Waiting…</span>
-  </div>
-  <div class="row">
-    <a id="conversationLink" href="#" target="_blank" style="display:none;">
-      Open conversation in Missive →
-    </a>
+  <div class="block">
+    <strong>Conversation</strong><br />
+    ID: <span id="conversationId">Waiting…</span>
   </div>
 
   <h2>Missive Messages</h2>
-  <div id="messages">Waiting for conversation…</div>
+  <ul id="messages">
+    <li>Waiting for conversation…</li>
+  </ul>
 
   <h2>Drafts</h2>
-  <div id="drafts">Waiting for conversation…</div>
+  <div class="muted">Draft detection coming next.</div>
 
   <h2>Raw payload (debug)</h2>
-  <pre id="payload">Waiting for conversation…</pre>
+  <pre id="debug">Waiting for conversation…</pre>
 
   <script>
-    function extractDraftLinksFromHtml(html) {
-      const links = [];
-      if (!html) return links;
+    function renderMessages(conversationId, messages) {
+      const list = document.getElementById("messages");
+      list.innerHTML = "";
 
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      doc.querySelectorAll("a[href]").forEach(a => {
-        const href = a.getAttribute("href");
-        if (href && href.startsWith("drafts://")) {
-          links.push(href);
-        }
-      });
-      return links;
-    }
+      if (!messages || messages.length === 0) {
+        list.innerHTML = "<li>No messages found.</li>";
+        return;
+      }
 
-    function updateConversation(conversation) {
-      document.getElementById("conversationId").textContent = conversation.id;
+      // Oldest → newest
+      messages
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        .forEach((msg, index) => {
+          const li = document.createElement("li");
 
-      const convoLink = document.getElementById("conversationLink");
-      convoLink.href =
-        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
-      convoLink.style.display = "inline";
+          const link = document.createElement("a");
+          link.href =
+            `https://mail.missiveapp.com/#inbox/conversations/${conversationId}/messages/${msg.id}`;
+          link.target = "_self"; // IMPORTANT: scrolls instead of popup
+          link.textContent = `Message ${index + 1}`;
 
-      document.getElementById("payload").textContent =
-        JSON.stringify(conversation, null, 2);
-
-      // Messages
-      const messagesEl = document.getElementById("messages");
-      messagesEl.innerHTML = "";
-
-      const draftsEl = document.getElementById("drafts");
-      draftsEl.innerHTML = "";
-
-      let foundDraft = false;
-
-      (conversation.messages || []).forEach((msg, index) => {
-        // Message block
-        const msgDiv = document.createElement("div");
-        msgDiv.className = "message";
-
-        const msgLink =
-  `https://mail.missiveapp.com/#inbox/conversations/${conversation.id}/messages/${msg.id}`;
-
-        msgDiv.innerHTML = `
-          <div><strong>Message ${index + 1}</strong></div>
-          <div class="muted">${msg.author?.name || "Unknown sender"}</div>
-          <div>
-            <a href="${msgLink}" target="_blank">
-              Open this message in Missive →
-            </a>
-          </div>
-        `;
-
-        messagesEl.appendChild(msgDiv);
-
-        // Drafts detection (SAFE)
-        const drafts = extractDraftLinksFromHtml(msg.body_html);
-        drafts.forEach(draftsUrl => {
-          foundDraft = true;
-          const btn = document.createElement("button");
-          btn.textContent = "Open Draft";
-          btn.onclick = () => window.open(draftsUrl);
-          draftsEl.appendChild(btn);
+          li.appendChild(link);
+          list.appendChild(li);
         });
-      });
-
-      if (!conversation.messages || conversation.messages.length === 0) {
-        messagesEl.textContent = "No messages found.";
-      }
-
-      if (!foundDraft) {
-        draftsEl.textContent = "No Drafts links found.";
-      }
     }
 
     Missive.on("change:conversations", (conversationIds) => {
       if (!conversationIds || conversationIds.length === 0) return;
 
-      Missive.fetchConversations(conversationIds).then(conversations => {
-        if (conversations && conversations.length > 0) {
-          updateConversation(conversations[0]);
+      const conversationId = conversationIds[0];
+      document.getElementById("conversationId").textContent = conversationId;
+      document.getElementById("messages").innerHTML =
+        "<li>Loading messages…</li>";
+
+      // Fetch conversation for debug
+      Missive.fetchConversations([conversationId]).then((conversations) => {
+        if (conversations && conversations[0]) {
+          document.getElementById("debug").textContent =
+            JSON.stringify(conversations[0], null, 2);
         }
+      });
+
+      // Fetch ALL messages (not limited to 5)
+      Missive.fetchMessages(conversationId).then((messages) => {
+        renderMessages(conversationId, messages);
       });
     });
   </script>
