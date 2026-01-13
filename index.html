@@ -1,5 +1,3 @@
-<!-- Version 2.11 -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,8 +7,11 @@
 
   <!--
     Missive Sidebar Integration
-    Version 2.11
-    Baseline 2.07 + add change:conversation listener (no other changes)
+    Version 2.12
+    Baseline:
+      - 2.06 conversation-level aggregation (WORKING)
+      - 2.11 improved Drafts regex + dual listeners
+    No new features added.
   -->
 
   <style>
@@ -35,6 +36,7 @@
       font-size: 13px;
       display: block;
       margin: 2px 0;
+      word-break: break-all;
     }
     a:hover { text-decoration: underline; }
 
@@ -45,20 +47,15 @@
       margin-top: 4px;
       user-select: none;
     }
-    .toggle::before {
-      content: "▸ ";
-    }
-    .toggle.open::before {
-      content: "▾ ";
-    }
+    .toggle::before { content: "▸ "; }
+    .toggle.open::before { content: "▾ "; }
+
     .toggle-content {
       display: none;
       margin-left: 12px;
       margin-top: 4px;
     }
-    .toggle-content.open {
-      display: block;
-    }
+    .toggle-content.open { display: block; }
 
     pre {
       background: #f6f8fa;
@@ -74,7 +71,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Version 2.11 — add change:conversation listener</div>
+<div class="muted">Version 2.12 — merged 2.06 + 2.11 baseline</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -84,17 +81,18 @@
       Open conversation in Missive →
     </a>
   </div>
+  <div id="conversationLinks"></div>
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (baseline preserved)</div>
+<div class="muted">Newest → Oldest (ordering preserved)</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
 <pre id="payload">Waiting…</pre>
 
 <script>
-  const VERSION = "2.11";
+  const VERSION = "2.12";
 
   function createToggle(label) {
     const toggle = document.createElement("div");
@@ -112,7 +110,7 @@
     return { toggle, content };
   }
 
-  // Trim trailing punctuation from extracted URLs
+  // Improved URL extraction (from 2.11)
   function extractUrls(text) {
     if (!text) return [];
 
@@ -141,6 +139,9 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
+    const convoLinksEl = document.getElementById("conversationLinks");
+    convoLinksEl.innerHTML = "";
+
     if (!Array.isArray(conversation.messages) || !conversation.messages.length) {
       messagesEl.textContent = "No messages provided by SDK.";
       return;
@@ -148,7 +149,52 @@
 
     const totalMessages = conversation.messages_count;
 
-    // BASELINE ORDERING (unchanged)
+    // ---- Conversation-level aggregation (from 2.06) ----
+    const convoDrafts = new Set();
+    const convoWeb = new Set();
+
+    conversation.messages.forEach(msg => {
+      const urls = extractUrls(msg.body || msg.preview || "");
+      urls.forEach(url => {
+        if (isDraftsLink(url)) {
+          convoDrafts.add(url);
+        } else {
+          convoWeb.add(url);
+        }
+      });
+    });
+
+    if (convoDrafts.size || convoWeb.size) {
+      if (convoDrafts.size) {
+        const t = createToggle("Drafts / App links");
+        convoDrafts.forEach(url => {
+          const a = document.createElement("a");
+          a.href = url;
+          a.textContent = url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          t.content.appendChild(a);
+        });
+        convoLinksEl.appendChild(t.toggle);
+        convoLinksEl.appendChild(t.content);
+      }
+
+      if (convoWeb.size) {
+        const t = createToggle("Web links");
+        convoWeb.forEach(url => {
+          const a = document.createElement("a");
+          a.href = url;
+          a.textContent = url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          t.content.appendChild(a);
+        });
+        convoLinksEl.appendChild(t.toggle);
+        convoLinksEl.appendChild(t.content);
+      }
+    }
+
+    // ---- Message rendering (unchanged baseline) ----
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -203,7 +249,7 @@
     });
   }
 
-  // EXISTING listener (unchanged)
+  // Existing listener
   Missive.on("change:conversations", (ids) => {
     if (!ids || !ids.length) return;
 
@@ -215,7 +261,7 @@
       });
   });
 
-  // ✅ ADDITIVE FIX ONLY: handle single conversation changes
+  // Additive listener (from 2.11)
   Missive.on("change:conversation", (conversation) => {
     if (!conversation) return;
 
