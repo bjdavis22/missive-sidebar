@@ -13,6 +13,7 @@
       font-size: 14px;
       color: #111;
     }
+
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
     .muted { font-size: 12px; color: #666; }
@@ -23,9 +24,7 @@
       margin-top: 6px;
     }
 
-    details {
-      margin-top: 6px;
-    }
+    details { margin-top: 6px; }
 
     summary {
       cursor: pointer;
@@ -33,6 +32,13 @@
       color: #2563eb;
       user-select: none;
     }
+
+    ul {
+      margin: 6px 0;
+      padding-left: 16px;
+    }
+
+    li { margin-bottom: 4px; }
 
     a {
       color: #2563eb;
@@ -42,13 +48,6 @@
     }
 
     a:hover { text-decoration: underline; }
-
-    ul {
-      margin: 6px 0;
-      padding-left: 16px;
-    }
-
-    li { margin-bottom: 4px; }
 
     pre {
       background: #f6f8fa;
@@ -64,7 +63,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · Drafts links fixed</div>
+<div class="muted">Baseline ordering preserved · iframe-safe app links</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -85,46 +84,58 @@
 
 <script>
   function cleanUrl(url) {
-    // Remove ONLY trailing punctuation that breaks URLs
     return url.replace(/[)\].,]+$/, "");
   }
 
   function extractLinks(text) {
     const drafts = [];
     const web = [];
+    const other = [];
 
-    if (!text) return { drafts, web };
+    if (!text) return { drafts, web, other };
 
-    // Markdown-style links: [label](url)
-    const mdRegex = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+    // Markdown links
+    const md = /\[([^\]]+)\]\(([^)\s]+)\)/g;
     let match;
 
-    while ((match = mdRegex.exec(text)) !== null) {
+    while ((match = md.exec(text)) !== null) {
       const label = match[1];
-      const rawUrl = match[2];
-      const url = cleanUrl(rawUrl);
+      const url = cleanUrl(match[2]);
 
-      if (url.startsWith("drafts://")) {
-        drafts.push({ label, url });
-      } else if (url.startsWith("http")) {
-        web.push({ label, url });
-      }
+      if (url.startsWith("drafts://")) drafts.push({ label, url });
+      else if (url.startsWith("http")) web.push({ label, url });
+      else other.push({ label, url });
     }
 
-    // Bare URLs (fallback)
-    const bareRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
-    const bareMatches = text.match(bareRegex) || [];
-
-    bareMatches.forEach(raw => {
+    // Bare URLs fallback
+    const bare = /\b([a-z][a-z0-9+\-.]*:\/\/[^\s<>"]+)/gi;
+    (text.match(bare) || []).forEach(raw => {
       const url = cleanUrl(raw);
-      if (url.startsWith("drafts://")) {
-        drafts.push({ label: url, url });
-      } else {
-        web.push({ label: url, url });
-      }
+      if (url.startsWith("drafts://")) drafts.push({ label: url, url });
+      else if (url.startsWith("http")) web.push({ label: url, url });
+      else other.push({ label: url, url });
     });
 
-    return { drafts, web };
+    return { drafts, web, other };
+  }
+
+  function renderLinkToggle(title, links, target) {
+    if (!links.length) return null;
+
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `${title} (${links.length})`;
+    details.appendChild(summary);
+
+    const ul = document.createElement("ul");
+    links.forEach(l => {
+      const li = document.createElement("li");
+      li.innerHTML = `<a href="${l.url}" ${target}>${l.label}</a>`;
+      ul.appendChild(li);
+    });
+
+    details.appendChild(ul);
+    return details;
   }
 
   function updateConversation(conversation) {
@@ -138,78 +149,58 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
-    if (!Array.isArray(conversation.messages) || conversation.messages.length === 0) {
+    if (!conversation.messages?.length) {
       messagesEl.textContent = "No messages provided by SDK.";
       return;
     }
 
-    const totalMessages = conversation.messages_count;
+    const total = conversation.messages_count;
 
-    // 🔑 YOUR BASELINE — unchanged
+    // 🔑 BASELINE — unchanged
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
-      const labelNumber = totalMessages - index;
+      const number = total - index;
       const author = msg.author?.name || "Unknown sender";
       const body = msg.text || msg.body || "";
 
-      const msgUrl =
-        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
-
-      const { drafts, web } = extractLinks(body);
-
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
+      msgDiv.innerHTML = `<div class="muted">Message ${number} · ${author}</div>`;
 
-      msgDiv.innerHTML = `
-        <div class="muted">Message ${labelNumber} · ${author}</div>
-        <div>
-          <a href="${msgUrl}" target="_blank">Open message in Missive →</a>
-        </div>
-      `;
+      const { drafts, web, other } = extractLinks(body);
 
-      if (drafts.length || web.length) {
-        const details = document.createElement("details");
-        details.innerHTML = `<summary>Links (${drafts.length + web.length})</summary>`;
+      const draftsToggle = renderLinkToggle(
+        "Drafts / App links",
+        drafts,
+        'target="_top"'
+      );
 
-        if (drafts.length) {
-          const ul = document.createElement("ul");
-          drafts.forEach(l => {
-            const li = document.createElement("li");
-            li.innerHTML = `<a href="${l.url}">${l.label}</a>`;
-            ul.appendChild(li);
-          });
-          details.append("Drafts links:");
-          details.appendChild(ul);
-        }
+      const webToggle = renderLinkToggle(
+        "Web links",
+        web,
+        'target="_blank"'
+      );
 
-        if (web.length) {
-          const ul = document.createElement("ul");
-          web.forEach(l => {
-            const li = document.createElement("li");
-            li.innerHTML = `<a href="${l.url}" target="_blank">${l.label}</a>`;
-            ul.appendChild(li);
-          });
-          details.append("Web links:");
-          details.appendChild(ul);
-        }
+      const otherToggle = renderLinkToggle(
+        "Other scheme links",
+        other,
+        'target="_top"'
+      );
 
-        msgDiv.appendChild(details);
-      }
+      [draftsToggle, webToggle, otherToggle]
+        .filter(Boolean)
+        .forEach(t => msgDiv.appendChild(t));
 
       messagesEl.appendChild(msgDiv);
     });
   }
 
   Missive.on("change:conversations", ids => {
-    if (!ids || !ids.length) return;
+    if (!ids?.length) return;
 
     Missive.fetchConversations(ids, { messages: true })
-      .then(conversations => {
-        if (conversations && conversations[0]) {
-          updateConversation(conversations[0]);
-        }
-      });
+      .then(convos => convos[0] && updateConversation(convos[0]));
   });
 </script>
 
