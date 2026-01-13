@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Missive Sidebar</title>
+  <title>Missive Sidebar Integration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Missive iframe JS API -->
+  <!-- Missive iframe SDK -->
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <style>
@@ -15,149 +15,153 @@
       margin: 0;
       background: #fff;
       color: #111;
+      font-size: 14px;
     }
     h1 {
       font-size: 16px;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
     }
     h2 {
       font-size: 14px;
       margin-top: 16px;
+      margin-bottom: 6px;
+    }
+    .muted {
+      color: #666;
+      font-size: 12px;
     }
     .row {
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
-    .label {
-      font-weight: 600;
-    }
-    .section {
-      margin-top: 12px;
-      padding-top: 8px;
+    .message {
       border-top: 1px solid #eee;
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+    a {
+      color: #2563eb;
+      text-decoration: none;
     }
     button {
-      display: block;
-      width: 100%;
-      margin: 6px 0;
-      padding: 8px;
-      font-size: 13px;
+      margin-top: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
       cursor: pointer;
     }
     pre {
       background: #f6f8fa;
       padding: 8px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 11px;
       overflow: auto;
+      max-height: 200px;
     }
   </style>
 </head>
 <body>
-  <h1>Missive Sidebar Integration</h1>
-  <div class="row"><strong>Read-only</strong></div>
 
+  <h1>Missive Sidebar Integration</h1>
+  <div class="muted">Read-only</div>
+
+  <h2>Conversation</h2>
   <div class="row">
-    <span class="label">Conversation ID:</span>
+    <strong>ID:</strong>
     <span id="conversationId">Waiting…</span>
   </div>
-
   <div class="row">
-    <span class="label">Subject:</span>
-    <span id="subject">–</span>
+    <a id="conversationLink" href="#" target="_blank" style="display:none;">
+      Open conversation in Missive →
+    </a>
   </div>
 
-  <div class="row">
-    <span class="label">Participants:</span>
-    <span id="participants">–</span>
-  </div>
+  <h2>Missive Messages</h2>
+  <div id="messages">Waiting for conversation…</div>
 
-  <div class="section">
-    <h2>Drafts</h2>
-    <div id="drafts">No drafts found</div>
-  </div>
+  <h2>Drafts</h2>
+  <div id="drafts">Waiting for conversation…</div>
 
-  <div class="section">
-    <h2>Missive Messages</h2>
-    <div id="messages">No messages yet</div>
-  </div>
-
-  <div class="section">
-    <h2>Debug payload</h2>
-    <pre id="payload">Waiting for conversation…</pre>
-  </div>
+  <h2>Raw payload (debug)</h2>
+  <pre id="payload">Waiting for conversation…</pre>
 
   <script>
-    function extractLinks(text) {
-      if (!text) return [];
-      const urlRegex = /\bhttps?:\/\/[^\s<>"]+/gi;
-      return text.match(urlRegex) || [];
+    function extractDraftLinksFromHtml(html) {
+      const links = [];
+      if (!html) return links;
+
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("a[href]").forEach(a => {
+        const href = a.getAttribute("href");
+        if (href && href.startsWith("drafts://")) {
+          links.push(href);
+        }
+      });
+      return links;
     }
 
     function updateConversation(conversation) {
-      document.getElementById("conversationId").textContent =
-        conversation.id || "–";
+      document.getElementById("conversationId").textContent = conversation.id;
 
-      document.getElementById("subject").textContent =
-        conversation.subject || "–";
-
-      if (conversation.participants) {
-        document.getElementById("participants").textContent =
-          conversation.participants
-            .map(p => p.email || p.name || p.id)
-            .join(", ");
-      } else {
-        document.getElementById("participants").textContent = "–";
-      }
-
-      // ----- LINK EXTRACTION -----
-      const draftsContainer = document.getElementById("drafts");
-      draftsContainer.innerHTML = "";
-
-      const messagesContainer = document.getElementById("messages");
-      messagesContainer.innerHTML = "";
-
-      let foundDrafts = false;
-
-      if (conversation.messages) {
-        conversation.messages.forEach((msg, index) => {
-          const text = msg.body_text || msg.body || "";
-          const links = extractLinks(text);
-
-          // Show message links (Missive message IDs)
-          const msgDiv = document.createElement("div");
-          msgDiv.textContent = `Message ${index + 1}: ${msg.id}`;
-          messagesContainer.appendChild(msgDiv);
-
-          links.forEach((url) => {
-            if (url.startsWith("drafts://")) {
-              foundDrafts = true;
-
-              const btn = document.createElement("button");
-              btn.textContent = "Open Draft";
-              btn.onclick = () => {
-                // Open via window.open – avoids rendering markdown
-                window.open(url);
-              };
-
-              draftsContainer.appendChild(btn);
-            }
-          });
-        });
-      }
-
-      if (!foundDrafts) {
-        draftsContainer.textContent = "No drafts found";
-      }
+      const convoLink = document.getElementById("conversationLink");
+      convoLink.href =
+        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
+      convoLink.style.display = "inline";
 
       document.getElementById("payload").textContent =
         JSON.stringify(conversation, null, 2);
+
+      // Messages
+      const messagesEl = document.getElementById("messages");
+      messagesEl.innerHTML = "";
+
+      const draftsEl = document.getElementById("drafts");
+      draftsEl.innerHTML = "";
+
+      let foundDraft = false;
+
+      (conversation.messages || []).forEach((msg, index) => {
+        // Message block
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message";
+
+        const msgLink =
+          `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}?message=${msg.id}`;
+
+        msgDiv.innerHTML = `
+          <div><strong>Message ${index + 1}</strong></div>
+          <div class="muted">${msg.author?.name || "Unknown sender"}</div>
+          <div>
+            <a href="${msgLink}" target="_blank">
+              Open this message in Missive →
+            </a>
+          </div>
+        `;
+
+        messagesEl.appendChild(msgDiv);
+
+        // Drafts detection (SAFE)
+        const drafts = extractDraftLinksFromHtml(msg.body_html);
+        drafts.forEach(draftsUrl => {
+          foundDraft = true;
+          const btn = document.createElement("button");
+          btn.textContent = "Open Draft";
+          btn.onclick = () => window.open(draftsUrl);
+          draftsEl.appendChild(btn);
+        });
+      });
+
+      if (!conversation.messages || conversation.messages.length === 0) {
+        messagesEl.textContent = "No messages found.";
+      }
+
+      if (!foundDraft) {
+        draftsEl.textContent = "No Drafts links found.";
+      }
     }
 
-    // Fired whenever the selected conversation changes
     Missive.on("change:conversations", (conversationIds) => {
       if (!conversationIds || conversationIds.length === 0) return;
 
-      Missive.fetchConversations(conversationIds).then((conversations) => {
+      Missive.fetchConversations(conversationIds).then(conversations => {
         if (conversations && conversations.length > 0) {
           updateConversation(conversations[0]);
         }
