@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>Missive Sidebar Integration</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <style>
@@ -12,12 +10,10 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       padding: 12px;
       margin: 0;
-      background: #fff;
-      color: #111;
       font-size: 14px;
     }
-    h1 { font-size: 16px; margin-bottom: 4px; }
-    h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
+    h1 { font-size: 16px; margin-bottom: 6px; }
+    h2 { font-size: 14px; margin-top: 14px; }
     .muted { color: #666; font-size: 12px; }
     .message {
       border-top: 1px solid #eee;
@@ -25,91 +21,100 @@
       margin-top: 8px;
     }
     button {
-      padding: 4px 8px;
       font-size: 12px;
+      padding: 4px 8px;
       cursor: pointer;
-      margin-top: 4px;
     }
     pre {
       background: #f6f8fa;
       padding: 8px;
-      border-radius: 4px;
       font-size: 11px;
-      overflow: auto;
       max-height: 200px;
+      overflow: auto;
     }
   </style>
 </head>
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Read-only baseline (SDK navigation)</div>
+<div class="muted">Stable baseline (forced re-fetch)</div>
 
 <h2>Conversation</h2>
-<div><strong>ID:</strong> <span id="conversationId">Waiting…</span></div>
-<button id="openConversationBtn" disabled>Open conversation</button>
+<div><strong>ID:</strong> <span id="cid">—</span></div>
+<button id="openConv" disabled>Open conversation</button>
 
-<h2>Missive Messages</h2>
-<div id="messages">Waiting for conversation…</div>
+<h2>Messages</h2>
+<div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
-<pre id="payload">Waiting for conversation…</pre>
+<pre id="payload">Waiting…</pre>
 
 <script>
-  function updateConversation(conversation) {
-    document.getElementById("conversationId").textContent = conversation.id;
+  let activeConversationId = null;
 
-    const openBtn = document.getElementById("openConversationBtn");
+  function renderConversation(conversation) {
+    document.getElementById("cid").textContent = conversation.id;
+
+    const openBtn = document.getElementById("openConv");
     openBtn.disabled = false;
-    openBtn.onclick = () => {
-      Missive.openConversation(conversation.id);
-    };
+    openBtn.onclick = () => Missive.openConversation(conversation.id);
 
     document.getElementById("payload").textContent =
       JSON.stringify(conversation, null, 2);
 
-    const messagesEl = document.getElementById("messages");
-    messagesEl.innerHTML = "";
+    const container = document.getElementById("messages");
+    container.innerHTML = "";
 
-    const messages = (conversation.messages || []).slice();
+    const messages = Array.isArray(conversation.messages)
+      ? [...conversation.messages]
+      : [];
 
-    // Oldest → newest
     messages.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
 
     messages.forEach((msg, index) => {
       const div = document.createElement("div");
       div.className = "message";
 
-      const btn = document.createElement("button");
-      btn.textContent = `Message ${index + 1}`;
-      btn.onclick = () => {
-        Missive.openMessage(conversation.id, msg.id);
-      };
-
       const sender = document.createElement("div");
       sender.className = "muted";
       sender.textContent = msg.author?.name || "Unknown sender";
 
+      const btn = document.createElement("button");
+      btn.textContent = `Message ${index + 1}`;
+      btn.onclick = () => {
+        // Stable navigation: open conversation, let Missive handle scroll
+        Missive.openConversation(conversation.id);
+      };
+
       div.appendChild(sender);
       div.appendChild(btn);
-      messagesEl.appendChild(div);
+      container.appendChild(div);
     });
 
     if (messages.length === 0) {
-      messagesEl.textContent = "No messages found.";
+      container.textContent = "No messages found.";
     }
   }
 
-  Missive.on("change:conversations", (conversationIds) => {
-    if (!conversationIds || conversationIds.length === 0) return;
-
-    // 🔑 THIS IS THE FIX
-    Missive.fetchConversations(conversationIds, { messages: true })
+  function fetchAndRender(conversationId) {
+    Missive.fetchConversations([conversationId], { messages: true })
       .then(conversations => {
-        if (conversations && conversations.length > 0) {
-          updateConversation(conversations[0]);
+        if (conversations && conversations[0]) {
+          renderConversation(conversations[0]);
         }
       });
+  }
+
+  Missive.on("change:conversations", (conversationIds) => {
+    if (!conversationIds || !conversationIds.length) return;
+
+    const newId = conversationIds[0];
+
+    // Always re-fetch when conversation becomes active
+    if (newId !== activeConversationId) {
+      activeConversationId = newId;
+      fetchAndRender(newId);
+    }
   });
 </script>
 
