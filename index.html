@@ -54,7 +54,9 @@
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (derived from timestamps)</div>
+<div class="muted">
+  Newest → Oldest (assumes SDK provides oldest → newest)
+</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
@@ -80,14 +82,12 @@
 
     const totalMessages = conversation.messages_count;
 
-    // ✅ HARD SORT: newest → oldest by timestamp
-    const sortedMessages = [...conversation.messages].sort((a, b) => {
-      const ta = new Date(a.created_at || a.sent_at || 0).getTime();
-      const tb = new Date(b.created_at || b.sent_at || 0).getTime();
-      return tb - ta;
-    });
+    // 🔑 OPTION 1:
+    // Assume SDK gives messages oldest → newest
+    // Reverse once to get newest → oldest
+    const displayMessages = [...conversation.messages].reverse();
 
-    sortedMessages.forEach((msg, index) => {
+    displayMessages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
 
       const msgUrl =
