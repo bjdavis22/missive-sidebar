@@ -63,13 +63,13 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · safe link handling</div>
+<div class="muted">Baseline ordering preserved · external navigation fixed</div>
 
 <h2>Conversation</h2>
 <div class="message">
   <div><strong>ID:</strong> <span id="conversationId">—</span></div>
   <div>
-    <a id="conversationLink" href="#" target="_blank">
+    <a id="conversationLink" target="_blank" rel="noopener noreferrer">
       Open conversation in Missive →
     </a>
   </div>
@@ -90,20 +90,16 @@
   function extractLinks(text) {
     const drafts = [];
     const web = [];
-
     if (!text) return { drafts, web };
 
-    // Markdown links
     const md = /\[([^\]]+)\]\(([^)\s]+)\)/g;
-    let match;
-    while ((match = md.exec(text)) !== null) {
-      const label = match[1];
-      const url = cleanUrl(match[2]);
-      if (url.startsWith("drafts://")) drafts.push({ label, url });
-      else if (url.startsWith("http")) web.push({ label, url });
+    let m;
+    while ((m = md.exec(text)) !== null) {
+      const url = cleanUrl(m[2]);
+      if (url.startsWith("drafts://")) drafts.push({ label: m[1], url });
+      else if (url.startsWith("http")) web.push({ label: m[1], url });
     }
 
-    // Bare URLs
     const bare = /\b([a-z][a-z0-9+\-.]*:\/\/[^\s<>"]+)/gi;
     (text.match(bare) || []).forEach(raw => {
       const url = cleanUrl(raw);
@@ -125,7 +121,12 @@
     const ul = document.createElement("ul");
     links.forEach(l => {
       const li = document.createElement("li");
-      li.innerHTML = `<a href="${l.url}">${l.label}</a>`;
+      li.innerHTML = `
+        <a href="${l.url}"
+           target="_blank"
+           rel="noopener noreferrer">
+          ${l.label}
+        </a>`;
       ul.appendChild(li);
     });
 
@@ -135,6 +136,7 @@
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
+
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -145,7 +147,7 @@
     messagesEl.innerHTML = "";
 
     const total = conversation.messages_count;
-    const ordered = [...conversation.messages].reverse(); // baseline
+    const ordered = [...conversation.messages].reverse();
 
     ordered.forEach((msg, index) => {
       const msgDiv = document.createElement("div");
@@ -159,7 +161,9 @@
           Message ${total - index} · ${msg.author?.name || "Unknown sender"}
         </div>
         <div>
-          <a href="${msgUrl}" target="_blank">
+          <a href="${msgUrl}"
+             target="_blank"
+             rel="noopener noreferrer">
             Open message in Missive →
           </a>
         </div>
@@ -180,7 +184,6 @@
 
   Missive.on("change:conversations", ids => {
     if (!ids?.length) return;
-
     Missive.fetchConversations(ids, { messages: true })
       .then(c => c[0] && updateConversation(c[0]));
   });
