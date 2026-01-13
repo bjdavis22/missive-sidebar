@@ -24,7 +24,7 @@
     }
 
     details {
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
     summary {
@@ -41,18 +41,14 @@
       word-break: break-all;
     }
 
-    a:hover {
-      text-decoration: underline;
-    }
+    a:hover { text-decoration: underline; }
 
     ul {
-      padding-left: 16px;
       margin: 6px 0;
+      padding-left: 16px;
     }
 
-    li {
-      margin-bottom: 4px;
-    }
+    li { margin-bottom: 4px; }
 
     pre {
       background: #f6f8fa;
@@ -68,7 +64,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · Markdown link parsing enabled</div>
+<div class="muted">Baseline ordering preserved · Drafts links fixed</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -88,19 +84,25 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
-  function extractLinksFromText(text) {
+  function cleanUrl(url) {
+    // Remove ONLY trailing punctuation that breaks URLs
+    return url.replace(/[)\].,]+$/, "");
+  }
+
+  function extractLinks(text) {
     const drafts = [];
     const web = [];
 
     if (!text) return { drafts, web };
 
     // Markdown-style links: [label](url)
-    const markdownRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const mdRegex = /\[([^\]]+)\]\(([^)\s]+)\)/g;
     let match;
 
-    while ((match = markdownRegex.exec(text)) !== null) {
+    while ((match = mdRegex.exec(text)) !== null) {
       const label = match[1];
-      const url = match[2].replace(/[)\],.]+$/, "");
+      const rawUrl = match[2];
+      const url = cleanUrl(rawUrl);
 
       if (url.startsWith("drafts://")) {
         drafts.push({ label, url });
@@ -109,13 +111,12 @@
       }
     }
 
-    // Bare URLs (not already captured by markdown)
-    const bareUrlRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
-    const bareMatches = text.match(bareUrlRegex) || [];
+    // Bare URLs (fallback)
+    const bareRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
+    const bareMatches = text.match(bareRegex) || [];
 
-    bareMatches.forEach(rawUrl => {
-      const url = rawUrl.replace(/[)\],.]+$/, "");
-
+    bareMatches.forEach(raw => {
+      const url = cleanUrl(raw);
       if (url.startsWith("drafts://")) {
         drafts.push({ label: url, url });
       } else {
@@ -128,7 +129,6 @@
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
-
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -145,8 +145,7 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔑 BASELINE: SDK provides oldest → newest
-    // Reverse ONCE and USE IT
+    // 🔑 YOUR BASELINE — unchanged
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -157,27 +156,21 @@
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const { drafts, web } = extractLinksFromText(body);
+      const { drafts, web } = extractLinks(body);
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
 
       msgDiv.innerHTML = `
-        <div class="muted">
-          Message ${labelNumber} · ${author}
-        </div>
+        <div class="muted">Message ${labelNumber} · ${author}</div>
         <div>
-          <a href="${msgUrl}" target="_blank">
-            Open message in Missive →
-          </a>
+          <a href="${msgUrl}" target="_blank">Open message in Missive →</a>
         </div>
       `;
 
       if (drafts.length || web.length) {
         const details = document.createElement("details");
-        details.innerHTML = `
-          <summary>Links (${drafts.length + web.length})</summary>
-        `;
+        details.innerHTML = `<summary>Links (${drafts.length + web.length})</summary>`;
 
         if (drafts.length) {
           const ul = document.createElement("ul");
@@ -186,7 +179,7 @@
             li.innerHTML = `<a href="${l.url}">${l.label}</a>`;
             ul.appendChild(li);
           });
-          details.appendChild(document.createTextNode("Drafts links:"));
+          details.append("Drafts links:");
           details.appendChild(ul);
         }
 
@@ -197,7 +190,7 @@
             li.innerHTML = `<a href="${l.url}" target="_blank">${l.label}</a>`;
             ul.appendChild(li);
           });
-          details.appendChild(document.createTextNode("Web links:"));
+          details.append("Web links:");
           details.appendChild(ul);
         }
 
@@ -208,7 +201,7 @@
     });
   }
 
-  Missive.on("change:conversations", (ids) => {
+  Missive.on("change:conversations", ids => {
     if (!ids || !ids.length) return;
 
     Missive.fetchConversations(ids, { messages: true })
