@@ -47,7 +47,9 @@
 <div class="message">
   <div><strong>ID:</strong> <span id="conversationId">—</span></div>
   <div>
-    <a id="conversationLink" href="#" target="_blank">Open conversation in Missive →</a>
+    <a id="conversationLink" href="#" target="_blank">
+      Open conversation in Missive →
+    </a>
   </div>
 </div>
 
@@ -62,7 +64,7 @@
 
 <script>
   function updateConversation(conversation) {
-    // Conversation
+    // Conversation info
     document.getElementById("conversationId").textContent = conversation.id;
 
     const convoUrl =
@@ -82,18 +84,17 @@
       return;
     }
 
-    // Keep order AS-IS (top = most recent)
-    const messages = [...conversation.messages].reverse();
-    const total = messages.length;
+    const totalMessages = conversation.messages_count;
 
-    messages.forEach((msg, index) => {
+    // KEEP ORDER AS-IS (newest → oldest as provided by SDK)
+    conversation.messages.forEach((msg, index) => {
+      const labelNumber = totalMessages - index;
+
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
-
-      const labelNumber = total - index;
 
       msgDiv.innerHTML = `
         <div class="muted">
