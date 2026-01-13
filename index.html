@@ -5,7 +5,6 @@
   <title>Missive Sidebar Integration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Missive iframe SDK -->
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <style>
@@ -30,9 +29,6 @@
       color: #666;
       font-size: 12px;
     }
-    .row {
-      margin-bottom: 6px;
-    }
     .message {
       border-top: 1px solid #eee;
       padding-top: 8px;
@@ -41,103 +37,104 @@
     a {
       color: #2563eb;
       text-decoration: none;
-      cursor: pointer;
     }
     pre {
       background: #f6f8fa;
       padding: 8px;
       border-radius: 4px;
       font-size: 11px;
-      overflow: auto;
       max-height: 200px;
+      overflow: auto;
     }
   </style>
 </head>
 <body>
 
-  <h1>Missive Sidebar Integration</h1>
-  <div class="muted">Link-based baseline (SDK-safe)</div>
+<h1>Missive Sidebar Integration</h1>
+<div class="muted">Link-based baseline (SDK-safe)</div>
 
-  <h2>Conversation</h2>
-  <div class="row">
-    <strong>ID:</strong>
-    <span id="conversationId">Waiting…</span>
-  </div>
-  <div class="row">
-    <a id="conversationLink" href="#" target="_blank" style="display:none;">
-      Open conversation in Missive →
-    </a>
-  </div>
+<h2>Conversation</h2>
+<div>
+  <strong>ID:</strong>
+  <span id="conversationId">Waiting…</span>
+</div>
+<div>
+  <a id="conversationLink" href="#" target="_blank" style="display:none;">
+    Open conversation in Missive →
+  </a>
+</div>
 
-  <h2>Missive Messages</h2>
-  <div id="messages">Waiting for conversation…</div>
+<h2>Missive Messages</h2>
+<div id="messages">Waiting for conversation…</div>
 
-  <h2>Raw payload (debug)</h2>
-  <pre id="payload">Waiting for conversation…</pre>
+<h2>Raw payload (debug)</h2>
+<pre id="payload">Waiting for conversation…</pre>
 
-  <script>
-    function updateConversation(conversation) {
-      document.getElementById("conversationId").textContent = conversation.id;
+<script>
+function updateConversation(conversation) {
+  document.getElementById("conversationId").textContent = conversation.id;
 
-      const convoLink = document.getElementById("conversationLink");
-      convoLink.href =
-        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
-      convoLink.style.display = "inline";
+  const convoLink = document.getElementById("conversationLink");
+  convoLink.href =
+    `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
+  convoLink.style.display = "inline";
 
-      document.getElementById("payload").textContent =
-        JSON.stringify(conversation, null, 2);
+  document.getElementById("payload").textContent =
+    JSON.stringify(conversation, null, 2);
 
-      const messagesEl = document.getElementById("messages");
-      messagesEl.innerHTML = "";
+  const messagesEl = document.getElementById("messages");
+  messagesEl.innerHTML = "";
 
-      const messages = conversation.messages || [];
+  const totalCount = conversation.messages_count || 0;
 
-      if (messages.length === 0) {
-        messagesEl.textContent = "No messages found.";
-        return;
-      }
+  // IMPORTANT: reverse so newest is on top
+  const messages = (conversation.messages || []).slice().reverse();
 
-      const total = messages.length;
+  if (messages.length === 0) {
+    messagesEl.textContent = "No messages found.";
+    return;
+  }
 
-      messages.forEach((msg, index) => {
-        const msgDiv = document.createElement("div");
-        msgDiv.className = "message";
+  messages.forEach((msg, index) => {
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "message";
 
-        const msgUrl =
-          `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
+    const messageNumber = totalCount - index;
 
-        const sender =
-          msg.author?.name ||
-          msg.from?.name ||
-          msg.from?.address ||
-          "System / Event";
+    const msgUrl =
+      `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-        const displayNumber = total - index;
+    const sender =
+      msg.author?.name ||
+      msg.from?.name ||
+      msg.from?.address ||
+      "System / Event";
 
-        msgDiv.innerHTML = `
-          <div class="muted">
-            Message ${displayNumber} · ${sender}
-          </div>
-          <div>
-            <a href="${msgUrl}" target="_blank">
-              Open message in Missive →
-            </a>
-          </div>
-        `;
+    msgDiv.innerHTML = `
+      <div class="muted">
+        Message ${messageNumber} · ${sender}
+      </div>
+      <div>
+        <a href="${msgUrl}" target="_blank">
+          Open message in Missive →
+        </a>
+      </div>
+    `;
 
-        messagesEl.appendChild(msgDiv);
-      });
+    messagesEl.appendChild(msgDiv);
+  });
+}
+
+Missive.on("change:conversations", (conversationIds) => {
+  if (!conversationIds || conversationIds.length === 0) return;
+
+  Missive.fetchConversations(conversationIds).then(conversations => {
+    if (conversations && conversations.length > 0) {
+      updateConversation(conversations[0]);
     }
+  });
+});
+</script>
 
-    Missive.on("change:conversations", (conversationIds) => {
-      if (!conversationIds || conversationIds.length === 0) return;
-
-      Missive.fetchConversations(conversationIds).then(conversations => {
-        if (conversations && conversations.length > 0) {
-          updateConversation(conversations[0]);
-        }
-      });
-    });
-  </script>
 </body>
 </html>
