@@ -20,11 +20,28 @@
       font-size: 16px;
       margin-bottom: 12px;
     }
+    h2 {
+      font-size: 14px;
+      margin-top: 16px;
+    }
     .row {
       margin-bottom: 8px;
     }
     .label {
       font-weight: 600;
+    }
+    .section {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+    }
+    button {
+      display: block;
+      width: 100%;
+      margin: 6px 0;
+      padding: 8px;
+      font-size: 13px;
+      cursor: pointer;
     }
     pre {
       background: #f6f8fa;
@@ -36,7 +53,8 @@
   </style>
 </head>
 <body>
-  <h1>Missive Sidebar</h1>
+  <h1>Missive Sidebar Integration</h1>
+  <div class="row"><strong>Read-only</strong></div>
 
   <div class="row">
     <span class="label">Conversation ID:</span>
@@ -53,10 +71,28 @@
     <span id="participants">–</span>
   </div>
 
-  <h2>Debug payload</h2>
-  <pre id="payload">Waiting for conversation…</pre>
+  <div class="section">
+    <h2>Drafts</h2>
+    <div id="drafts">No drafts found</div>
+  </div>
+
+  <div class="section">
+    <h2>Missive Messages</h2>
+    <div id="messages">No messages yet</div>
+  </div>
+
+  <div class="section">
+    <h2>Debug payload</h2>
+    <pre id="payload">Waiting for conversation…</pre>
+  </div>
 
   <script>
+    function extractLinks(text) {
+      if (!text) return [];
+      const urlRegex = /\bhttps?:\/\/[^\s<>"]+/gi;
+      return text.match(urlRegex) || [];
+    }
+
     function updateConversation(conversation) {
       document.getElementById("conversationId").textContent =
         conversation.id || "–";
@@ -73,6 +109,46 @@
         document.getElementById("participants").textContent = "–";
       }
 
+      // ----- LINK EXTRACTION -----
+      const draftsContainer = document.getElementById("drafts");
+      draftsContainer.innerHTML = "";
+
+      const messagesContainer = document.getElementById("messages");
+      messagesContainer.innerHTML = "";
+
+      let foundDrafts = false;
+
+      if (conversation.messages) {
+        conversation.messages.forEach((msg, index) => {
+          const text = msg.body_text || msg.body || "";
+          const links = extractLinks(text);
+
+          // Show message links (Missive message IDs)
+          const msgDiv = document.createElement("div");
+          msgDiv.textContent = `Message ${index + 1}: ${msg.id}`;
+          messagesContainer.appendChild(msgDiv);
+
+          links.forEach((url) => {
+            if (url.startsWith("drafts://")) {
+              foundDrafts = true;
+
+              const btn = document.createElement("button");
+              btn.textContent = "Open Draft";
+              btn.onclick = () => {
+                // Open via window.open – avoids rendering markdown
+                window.open(url);
+              };
+
+              draftsContainer.appendChild(btn);
+            }
+          });
+        });
+      }
+
+      if (!foundDrafts) {
+        draftsContainer.textContent = "No drafts found";
+      }
+
       document.getElementById("payload").textContent =
         JSON.stringify(conversation, null, 2);
     }
@@ -81,7 +157,6 @@
     Missive.on("change:conversations", (conversationIds) => {
       if (!conversationIds || conversationIds.length === 0) return;
 
-      // Fetch full conversation objects
       Missive.fetchConversations(conversationIds).then((conversations) => {
         if (conversations && conversations.length > 0) {
           updateConversation(conversations[0]);
