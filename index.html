@@ -11,110 +11,112 @@
       padding: 12px;
       margin: 0;
       font-size: 14px;
+      color: #111;
     }
-    h1 { font-size: 16px; margin-bottom: 6px; }
-    h2 { font-size: 14px; margin-top: 14px; }
-    .muted { color: #666; font-size: 12px; }
+    h1 { font-size: 16px; margin-bottom: 4px; }
+    h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
+    .muted { font-size: 12px; color: #666; }
     .message {
       border-top: 1px solid #eee;
-      padding-top: 8px;
-      margin-top: 8px;
+      padding-top: 6px;
+      margin-top: 6px;
     }
-    button {
-      font-size: 12px;
-      padding: 4px 8px;
-      cursor: pointer;
+    a {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 13px;
     }
+    a:hover { text-decoration: underline; }
     pre {
       background: #f6f8fa;
       padding: 8px;
+      border-radius: 4px;
       font-size: 11px;
       max-height: 200px;
       overflow: auto;
     }
   </style>
 </head>
+
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Stable baseline (forced re-fetch)</div>
+<div class="muted">Link-based baseline (SDK-safe)</div>
 
 <h2>Conversation</h2>
-<div><strong>ID:</strong> <span id="cid">—</span></div>
-<button id="openConv" disabled>Open conversation</button>
+<div class="message">
+  <div><strong>ID:</strong> <span id="conversationId">—</span></div>
+  <div>
+    <a id="conversationLink" href="#" target="_blank">Open conversation in Missive →</a>
+  </div>
+</div>
 
-<h2>Messages</h2>
+<h2>Missive Messages</h2>
+<div class="muted">
+  Links open the conversation context. Message focus is not supported by the SDK.
+</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
 <pre id="payload">Waiting…</pre>
 
 <script>
-  let activeConversationId = null;
+  function updateConversation(conversation) {
+    // Conversation
+    document.getElementById("conversationId").textContent = conversation.id;
 
-  function renderConversation(conversation) {
-    document.getElementById("cid").textContent = conversation.id;
+    const convoUrl =
+      `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
-    const openBtn = document.getElementById("openConv");
-    openBtn.disabled = false;
-    openBtn.onclick = () => Missive.openConversation(conversation.id);
+    const convoLink = document.getElementById("conversationLink");
+    convoLink.href = convoUrl;
 
     document.getElementById("payload").textContent =
       JSON.stringify(conversation, null, 2);
 
-    const container = document.getElementById("messages");
-    container.innerHTML = "";
+    // Messages
+    const messagesEl = document.getElementById("messages");
+    messagesEl.innerHTML = "";
 
-    const messages = Array.isArray(conversation.messages)
-      ? [...conversation.messages]
-      : [];
+    if (!Array.isArray(conversation.messages) || conversation.messages.length === 0) {
+      messagesEl.textContent = "No messages provided by SDK.";
+      return;
+    }
 
-    messages.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+    // Oldest → newest
+    const messages = [...conversation.messages].reverse();
 
     messages.forEach((msg, index) => {
-      const div = document.createElement("div");
-      div.className = "message";
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message";
 
-      const sender = document.createElement("div");
-      sender.className = "muted";
-      sender.textContent = msg.author?.name || "Unknown sender";
+      const msgUrl =
+        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const btn = document.createElement("button");
-      btn.textContent = `Message ${index + 1}`;
-      btn.onclick = () => {
-        // Stable navigation: open conversation, let Missive handle scroll
-        Missive.openConversation(conversation.id);
-      };
+      msgDiv.innerHTML = `
+        <div class="muted">
+          Message ${index + 1} · ${msg.author?.name || "Unknown sender"}
+        </div>
+        <div>
+          <a href="${msgUrl}" target="_blank">
+            Open message in Missive →
+          </a>
+        </div>
+      `;
 
-      div.appendChild(sender);
-      div.appendChild(btn);
-      container.appendChild(div);
+      messagesEl.appendChild(msgDiv);
     });
-
-    if (messages.length === 0) {
-      container.textContent = "No messages found.";
-    }
   }
 
-  function fetchAndRender(conversationId) {
-    Missive.fetchConversations([conversationId], { messages: true })
+  Missive.on("change:conversations", (ids) => {
+    if (!ids || !ids.length) return;
+
+    Missive.fetchConversations(ids, { messages: true })
       .then(conversations => {
         if (conversations && conversations[0]) {
-          renderConversation(conversations[0]);
+          updateConversation(conversations[0]);
         }
       });
-  }
-
-  Missive.on("change:conversations", (conversationIds) => {
-    if (!conversationIds || !conversationIds.length) return;
-
-    const newId = conversationIds[0];
-
-    // Always re-fetch when conversation becomes active
-    if (newId !== activeConversationId) {
-      activeConversationId = newId;
-      fetchAndRender(newId);
-    }
   });
 </script>
 
