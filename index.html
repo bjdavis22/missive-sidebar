@@ -16,11 +16,13 @@
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
     .muted { font-size: 12px; color: #666; }
+
     .message {
       border-top: 1px solid #eee;
       padding-top: 6px;
       margin-top: 6px;
     }
+
     a {
       color: #2563eb;
       text-decoration: none;
@@ -31,30 +33,21 @@
 
     details {
       margin-top: 6px;
-      background: #f9fafb;
-      border-radius: 4px;
-      padding: 6px 8px;
+      margin-left: 8px;
     }
     summary {
       cursor: pointer;
       font-size: 12px;
-      color: #374151;
+      color: #444;
     }
+
     ul {
-      padding-left: 16px;
-      margin: 6px 0 0;
+      margin: 6px 0 0 14px;
+      padding: 0;
     }
     li {
-      font-size: 12px;
       margin-bottom: 4px;
-    }
-    .tag {
-      font-size: 11px;
-      background: #e5e7eb;
-      padding: 2px 6px;
-      border-radius: 999px;
-      margin-left: 6px;
-      color: #374151;
+      font-size: 12px;
     }
 
     pre {
@@ -71,7 +64,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Link-based baseline (SDK-safe)</div>
+<div class="muted">Baseline ordering preserved · Link extraction added</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -85,7 +78,7 @@
 
 <h2>Missive Messages</h2>
 <div class="muted">
-  Newest → Oldest (assumes SDK provides oldest → newest)
+  Newest → Oldest (baseline preserved)
 </div>
 <div id="messages">Waiting…</div>
 
@@ -93,21 +86,29 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
-  function extractLinks(text = "") {
-    const links = new Set();
+  function extractLinks(html) {
+    const drafts = [];
+    const http = [];
 
-    const http = /\bhttps?:\/\/[^\s<>"')]+/gi;
-    const drafts = /\bdrafts:\/\/[^\s<>"')]+|\[Drafts\]\([^)]+\)/gi;
+    if (!html) return { drafts, http };
 
-    (text.match(http) || []).forEach(l => links.add(l));
-    (text.match(drafts) || []).forEach(l => links.add(l));
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href");
+      if (!href) return;
 
-    return [...links];
+      if (href.startsWith("drafts://")) {
+        drafts.push(href);
+      } else if (href.startsWith("http://") || href.startsWith("https://")) {
+        http.push(href);
+      }
+    });
+
+    return { drafts, http };
   }
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
-
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -125,6 +126,8 @@
     const totalMessages = conversation.messages_count;
 
     // 🔒 BASELINE — DO NOT TOUCH
+    // Oldest → newest from SDK
+    // Reverse once → newest → oldest
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -133,34 +136,45 @@
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const links = extractLinks(msg.body || "");
-      const draftLinks = links.filter(l => l.includes("draft"));
-      const otherLinks = links.filter(l => !l.includes("draft"));
+      const { drafts, http } = extractLinks(msg.body_html);
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
+
+      let linksHtml = "";
+
+      if (drafts.length > 0) {
+        linksHtml += `
+          <details>
+            <summary>Drafts links (${drafts.length})</summary>
+            <ul>
+              ${drafts.map(l => `<li><a href="${l}">${l}</a></li>`).join("")}
+            </ul>
+          </details>
+        `;
+      }
+
+      if (http.length > 0) {
+        linksHtml += `
+          <details>
+            <summary>Web links (${http.length})</summary>
+            <ul>
+              ${http.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join("")}
+            </ul>
+          </details>
+        `;
+      }
 
       msgDiv.innerHTML = `
         <div class="muted">
           Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
         </div>
-
         <div>
-          <a href="${msgUrl}" target="_blank">Open message in Missive →</a>
+          <a href="${msgUrl}" target="_blank">
+            Open message in Missive →
+          </a>
         </div>
-
-        ${links.length ? `
-          <details>
-            <summary>
-              Links (${links.length})
-              ${draftLinks.length ? `<span class="tag">${draftLinks.length} drafts</span>` : ""}
-            </summary>
-            <ul>
-              ${draftLinks.map(l => `<li>📝 <a href="${l}" target="_blank">${l}</a></li>`).join("")}
-              ${otherLinks.map(l => `<li>🔗 <a href="${l}" target="_blank">${l}</a></li>`).join("")}
-            </ul>
-          </details>
-        ` : ""}
+        ${linksHtml}
       `;
 
       messagesEl.appendChild(msgDiv);
