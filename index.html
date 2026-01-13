@@ -7,9 +7,8 @@
 
   <!--
     Missive Sidebar Integration
-    Version 2.04
-    Fix: Drafts links reminder (open outside iframe)
-    Baseline ordering + toggles preserved
+    Version 2.05
+    Adds conversation-level link aggregation
   -->
 
   <style>
@@ -52,9 +51,7 @@
       margin-left: 12px;
       margin-top: 4px;
     }
-    .toggle-content.open {
-      display: block;
-    }
+    .toggle-content.open { display: block; }
 
     pre {
       background: #f6f8fa;
@@ -70,14 +67,17 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Version 2.04 — Drafts links fixed</div>
+<div class="muted">Version 2.05 — conversation links aggregated</div>
 
 <h2>Conversation</h2>
 <div class="message">
   <div><strong>ID:</strong> <span id="conversationId">—</span></div>
-  <a id="conversationLink" href="#" target="_blank" rel="noopener">
-    Open conversation in Missive →
-  </a>
+  <div>
+    <a id="conversationLink" href="#" target="_blank" rel="noopener">
+      Open conversation in Missive →
+    </a>
+  </div>
+  <div id="conversationLinks"></div>
 </div>
 
 <h2>Missive Messages</h2>
@@ -88,7 +88,7 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
-  const VERSION = "2.04";
+  const VERSION = "2.05";
 
   function createToggle(label) {
     const toggle = document.createElement("div");
@@ -108,8 +108,8 @@
 
   function extractUrls(text) {
     if (!text) return [];
-    const regex = /\bhttps?:\/\/[^\s<>")]+|\bdrafts:\/\/[^\s<>")]+/gi;
-    return [...new Set(text.match(regex) || [])];
+    const regex = /\bhttps?:\/\/[^\s<>"]+/gi;
+    return text.match(regex) || [];
   }
 
   function isDraftsLink(url) {
@@ -127,10 +127,56 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
+    const conversationLinksEl = document.getElementById("conversationLinks");
+    conversationLinksEl.innerHTML = "";
+
     if (!Array.isArray(conversation.messages) || !conversation.messages.length) {
       messagesEl.textContent = "No messages provided by SDK.";
       return;
     }
+
+    /* ---------------- Conversation-level aggregation ---------------- */
+
+    const allUrls = [];
+
+    conversation.messages.forEach(msg => {
+      extractUrls(msg.body || msg.preview || "").forEach(url => {
+        allUrls.push(url);
+      });
+    });
+
+    const uniqueUrls = [...new Set(allUrls)];
+
+    if (uniqueUrls.length) {
+      const draftsToggle = createToggle("Drafts / App links");
+      const webToggle = createToggle("Web links");
+
+      uniqueUrls.forEach(url => {
+        const link = document.createElement("a");
+        link.href = url;
+        link.textContent = url;
+        link.target = "_blank";
+        link.rel = "noopener";
+
+        if (isDraftsLink(url)) {
+          draftsToggle.content.appendChild(link);
+        } else {
+          webToggle.content.appendChild(link);
+        }
+      });
+
+      if (draftsToggle.content.children.length) {
+        conversationLinksEl.appendChild(draftsToggle.toggle);
+        conversationLinksEl.appendChild(draftsToggle.content);
+      }
+
+      if (webToggle.content.children.length) {
+        conversationLinksEl.appendChild(webToggle.toggle);
+        conversationLinksEl.appendChild(webToggle.content);
+      }
+    }
+
+    /* ---------------- Message rendering (unchanged) ---------------- */
 
     const totalMessages = conversation.messages_count;
     const displayMessages = [...conversation.messages].reverse();
@@ -153,26 +199,22 @@
       `;
 
       const urls = extractUrls(msg.body || msg.preview || "");
+      const uniqueMsgUrls = [...new Set(urls)];
 
-      if (urls.length) {
+      if (uniqueMsgUrls.length) {
         const draftsToggle = createToggle("Drafts / App links");
         const webToggle = createToggle("Web links");
 
-        urls.forEach(url => {
+        uniqueMsgUrls.forEach(url => {
           const link = document.createElement("a");
           link.href = url;
           link.textContent = url;
+          link.target = "_blank";
+          link.rel = "noopener";
 
           if (isDraftsLink(url)) {
-            link.addEventListener("click", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.open(url);
-            });
             draftsToggle.content.appendChild(link);
           } else {
-            link.target = "_blank";
-            link.rel = "noopener";
             webToggle.content.appendChild(link);
           }
         });
