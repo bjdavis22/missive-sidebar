@@ -1,75 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <title>Missive Sidebar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Missive iframe JS API -->
+  <script src="https://integrations.missiveapp.com/missive.js"></script>
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       padding: 12px;
+      margin: 0;
+      background: #fff;
+      color: #111;
+    }
+    h1 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .row {
+      margin-bottom: 8px;
+    }
+    .label {
+      font-weight: 600;
     }
     pre {
-      background: #f6f6f6;
+      background: #f6f8fa;
       padding: 8px;
-      border-radius: 6px;
+      border-radius: 4px;
       font-size: 12px;
-      overflow-x: auto;
+      overflow: auto;
     }
   </style>
 </head>
-
 <body>
-  <h2>Missive Sidebar Integration</h2>
-  <p><em>Read-only</em></p>
+  <h1>Missive Sidebar</h1>
 
-  <h3>Conversation</h3>
-  <p><strong>ID:</strong> <span id="conversation">Waiting…</span></p>
+  <div class="row">
+    <span class="label">Conversation ID:</span>
+    <span id="conversationId">Waiting…</span>
+  </div>
 
-  <h3>Message</h3>
-  <p><strong>ID:</strong> <span id="message">Waiting…</span></p>
+  <div class="row">
+    <span class="label">Subject:</span>
+    <span id="subject">–</span>
+  </div>
 
-  <h3>Account</h3>
-  <p><strong>ID:</strong> <span id="account">Waiting…</span></p>
+  <div class="row">
+    <span class="label">Participants:</span>
+    <span id="participants">–</span>
+  </div>
 
-  <h3>Raw context</h3>
-  <pre id="debug">Waiting for Missive…</pre>
+  <h2>Debug payload</h2>
+  <pre id="payload">Waiting for conversation…</pre>
 
   <script>
-    function setDebug(text) {
-      document.getElementById("debug").textContent = text;
-    }
+    function updateConversation(conversation) {
+      document.getElementById("conversationId").textContent =
+        conversation.id || "–";
 
-    function update(ctx) {
-      document.getElementById("conversation").textContent =
-        ctx.conversation?.id || "Not provided";
+      document.getElementById("subject").textContent =
+        conversation.subject || "–";
 
-      document.getElementById("message").textContent =
-        ctx.message?.id || "Not provided";
-
-      document.getElementById("account").textContent =
-        ctx.account?.id || "Not provided";
-
-      setDebug(JSON.stringify(ctx, null, 2));
-    }
-
-    // Wait for Missive SDK readiness (this is the missing piece)
-    function waitForMissive() {
-      if (!window.Missive || !Missive.ready) {
-        setTimeout(waitForMissive, 50);
-        return;
+      if (conversation.participants) {
+        document.getElementById("participants").textContent =
+          conversation.participants
+            .map(p => p.email || p.name || p.id)
+            .join(", ");
+      } else {
+        document.getElementById("participants").textContent = "–";
       }
 
-      Missive.ready.then(() => {
-        setDebug("Missive ready. Waiting for context…");
-
-        Missive.on("context", (ctx) => {
-          console.log("Missive context:", ctx);
-          update(ctx);
-        });
-      });
+      document.getElementById("payload").textContent =
+        JSON.stringify(conversation, null, 2);
     }
 
-    waitForMissive();
+    // Fired whenever the selected conversation changes
+    Missive.on("change:conversations", (conversationIds) => {
+      if (!conversationIds || conversationIds.length === 0) return;
+
+      // Fetch full conversation objects
+      Missive.fetchConversations(conversationIds).then((conversations) => {
+        if (conversations && conversations.length > 0) {
+          updateConversation(conversations[0]);
+        }
+      });
+    });
   </script>
 </body>
 </html>
