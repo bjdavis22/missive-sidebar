@@ -13,7 +13,6 @@
       font-size: 14px;
       color: #111;
     }
-
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
     .muted { font-size: 12px; color: #666; }
@@ -24,30 +23,30 @@
       margin-top: 6px;
     }
 
-    details { margin-top: 6px; }
-
-    summary {
-      cursor: pointer;
-      font-size: 12px;
-      color: #2563eb;
-      user-select: none;
-    }
-
-    ul {
-      margin: 6px 0;
-      padding-left: 16px;
-    }
-
-    li { margin-bottom: 6px; }
-
     a {
       color: #2563eb;
       text-decoration: none;
       font-size: 13px;
       word-break: break-all;
     }
-
     a:hover { text-decoration: underline; }
+
+    details {
+      margin-top: 6px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    ul {
+      padding-left: 16px;
+      margin: 6px 0;
+    }
+    li {
+      margin-bottom: 4px;
+    }
 
     pre {
       background: #f6f8fa;
@@ -63,80 +62,84 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · external navigation fixed</div>
+<div class="muted">Baseline 2.01 — conversation link aggregation</div>
 
 <h2>Conversation</h2>
 <div class="message">
   <div><strong>ID:</strong> <span id="conversationId">—</span></div>
   <div>
-    <a id="conversationLink" target="_blank" rel="noopener noreferrer">
-      Open conversation in Missive →
-    </a>
+    <a id="conversationLink" target="_blank">Open conversation in Missive →</a>
   </div>
 </div>
 
+<h2>Conversation Links</h2>
+<div id="conversationLinks" class="muted">Waiting…</div>
+
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest</div>
+<div class="muted">
+  Newest → Oldest (baseline ordering preserved)
+</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
 <pre id="payload">Waiting…</pre>
 
 <script>
-  function cleanUrl(url) {
-    return url.replace(/[)\].,]+$/, "");
+  function extractLinks(html) {
+    if (!html) return [];
+
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return Array.from(doc.querySelectorAll("a[href]"))
+      .map(a => a.getAttribute("href"))
+      .filter(Boolean);
   }
 
-  function extractLinks(text) {
-    const drafts = [];
-    const web = [];
-    if (!text) return { drafts, web };
+  function classifyLink(url) {
+    if (url.startsWith("drafts://")) return "Drafts";
+    if (url.includes("missiveapp.com")) return "Missive";
+    return "Web";
+  }
 
-    const md = /\[([^\]]+)\]\(([^)\s]+)\)/g;
-    let m;
-    while ((m = md.exec(text)) !== null) {
-      const url = cleanUrl(m[2]);
-      if (url.startsWith("drafts://")) drafts.push({ label: m[1], url });
-      else if (url.startsWith("http")) web.push({ label: m[1], url });
+  function renderConversationLinks(groupedLinks) {
+    const container = document.getElementById("conversationLinks");
+    container.innerHTML = "";
+
+    const appNames = Object.keys(groupedLinks).sort();
+
+    if (appNames.length === 0) {
+      container.textContent = "No links found in conversation.";
+      return;
     }
 
-    const bare = /\b([a-z][a-z0-9+\-.]*:\/\/[^\s<>"]+)/gi;
-    (text.match(bare) || []).forEach(raw => {
-      const url = cleanUrl(raw);
-      if (url.startsWith("drafts://")) drafts.push({ label: url, url });
-      else if (url.startsWith("http")) web.push({ label: url, url });
+    appNames.forEach(app => {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = `${app} (${groupedLinks[app].length})`;
+
+      const ul = document.createElement("ul");
+
+      groupedLinks[app].forEach(url => {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = url;
+        a.textContent = url;
+
+        // 🔑 critical: never load inside iframe
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+
+      details.appendChild(summary);
+      details.appendChild(ul);
+      container.appendChild(details);
     });
-
-    return { drafts, web };
-  }
-
-  function renderToggle(title, links) {
-    if (!links.length) return null;
-
-    const details = document.createElement("details");
-    const summary = document.createElement("summary");
-    summary.textContent = `${title} (${links.length})`;
-    details.appendChild(summary);
-
-    const ul = document.createElement("ul");
-    links.forEach(l => {
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <a href="${l.url}"
-           target="_blank"
-           rel="noopener noreferrer">
-          ${l.label}
-        </a>`;
-      ul.appendChild(li);
-    });
-
-    details.appendChild(ul);
-    return details;
   }
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
-
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -146,46 +149,65 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
-    const total = conversation.messages_count;
-    const ordered = [...conversation.messages].reverse();
+    if (!Array.isArray(conversation.messages) || conversation.messages.length === 0) {
+      messagesEl.textContent = "No messages provided by SDK.";
+      return;
+    }
 
-    ordered.forEach((msg, index) => {
-      const msgDiv = document.createElement("div");
-      msgDiv.className = "message";
+    const totalMessages = conversation.messages_count;
+
+    // 🔒 BASELINE ORDER — DO NOT TOUCH
+    const displayMessages = [...conversation.messages].reverse();
+
+    // Conversation-level aggregation
+    const seen = new Set();
+    const groupedLinks = {};
+
+    displayMessages.forEach((msg, index) => {
+      const labelNumber = totalMessages - index;
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message";
+
       msgDiv.innerHTML = `
         <div class="muted">
-          Message ${total - index} · ${msg.author?.name || "Unknown sender"}
+          Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
         </div>
         <div>
-          <a href="${msgUrl}"
-             target="_blank"
-             rel="noopener noreferrer">
+          <a href="${msgUrl}" target="_blank" rel="noopener noreferrer">
             Open message in Missive →
           </a>
         </div>
       `;
 
-      const body = msg.text || msg.body || "";
-      const { drafts, web } = extractLinks(body);
-
-      const draftsToggle = renderToggle("Drafts / App links", drafts);
-      const webToggle = renderToggle("Web links", web);
-
-      if (draftsToggle) msgDiv.appendChild(draftsToggle);
-      if (webToggle) msgDiv.appendChild(webToggle);
-
       messagesEl.appendChild(msgDiv);
+
+      // Collect links for conversation-level view
+      extractLinks(msg.body_html).forEach(url => {
+        if (seen.has(url)) return;
+        seen.add(url);
+
+        const app = classifyLink(url);
+        groupedLinks[app] ||= [];
+        groupedLinks[app].push(url);
+      });
     });
+
+    renderConversationLinks(groupedLinks);
   }
 
   Missive.on("change:conversations", ids => {
-    if (!ids?.length) return;
+    if (!ids || !ids.length) return;
+
     Missive.fetchConversations(ids, { messages: true })
-      .then(c => c[0] && updateConversation(c[0]));
+      .then(conversations => {
+        if (conversations && conversations[0]) {
+          updateConversation(conversations[0]);
+        }
+      });
   });
 </script>
 
