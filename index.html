@@ -33,7 +33,7 @@
 
     details {
       margin-top: 6px;
-      margin-left: 8px;
+      margin-left: 10px;
     }
     summary {
       cursor: pointer;
@@ -64,7 +64,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · Link extraction added</div>
+<div class="muted">Baseline ordering preserved · Links in toggles</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -88,9 +88,9 @@
 <script>
   function extractLinks(html) {
     const drafts = [];
-    const http = [];
+    const web = [];
 
-    if (!html) return { drafts, http };
+    if (!html) return { drafts, web };
 
     const doc = new DOMParser().parseFromString(html, "text/html");
     doc.querySelectorAll("a[href]").forEach(a => {
@@ -100,15 +100,16 @@
       if (href.startsWith("drafts://")) {
         drafts.push(href);
       } else if (href.startsWith("http://") || href.startsWith("https://")) {
-        http.push(href);
+        web.push(href);
       }
     });
 
-    return { drafts, http };
+    return { drafts, web };
   }
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
+
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -125,9 +126,7 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔒 BASELINE — DO NOT TOUCH
-    // Oldest → newest from SDK
-    // Reverse once → newest → oldest
+    // 🔒 BASELINE — DO NOT CHANGE
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -136,10 +135,7 @@
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const { drafts, http } = extractLinks(msg.body_html);
-
-      const msgDiv = document.createElement("div");
-      msgDiv.className = "message";
+      const { drafts, web } = extractLinks(msg.body_html);
 
       let linksHtml = "";
 
@@ -154,17 +150,19 @@
         `;
       }
 
-      if (http.length > 0) {
+      if (web.length > 0) {
         linksHtml += `
           <details>
-            <summary>Web links (${http.length})</summary>
+            <summary>Web links (${web.length})</summary>
             <ul>
-              ${http.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join("")}
+              ${web.map(l => `<li><a href="${l}" target="_blank">${l}</a></li>`).join("")}
             </ul>
           </details>
         `;
       }
 
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message";
       msgDiv.innerHTML = `
         <div class="muted">
           Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
