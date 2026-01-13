@@ -13,14 +13,9 @@
       font-size: 14px;
       color: #111;
     }
-
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
-
-    .muted {
-      font-size: 12px;
-      color: #666;
-    }
+    .muted { font-size: 12px; color: #666; }
 
     .message {
       border-top: 1px solid #eee;
@@ -28,35 +23,35 @@
       margin-top: 6px;
     }
 
+    details {
+      margin-top: 4px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: #2563eb;
+      user-select: none;
+    }
+
     a {
       color: #2563eb;
       text-decoration: none;
       font-size: 13px;
+      word-break: break-all;
     }
 
     a:hover {
       text-decoration: underline;
     }
 
-    details {
-      margin-top: 6px;
+    ul {
+      padding-left: 16px;
+      margin: 6px 0;
     }
 
-    summary {
-      cursor: pointer;
-      font-size: 12px;
-      color: #444;
-    }
-
-    .links {
-      margin-top: 4px;
-      padding-left: 12px;
-    }
-
-    .links a {
-      display: block;
-      word-break: break-all;
-      font-size: 12px;
+    li {
+      margin-bottom: 4px;
     }
 
     pre {
@@ -73,7 +68,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · Link extraction added</div>
+<div class="muted">Baseline ordering preserved · Markdown link parsing enabled</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -86,9 +81,7 @@
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">
-  Newest → Oldest (baseline preserved)
-</div>
+<div class="muted">Newest → Oldest (baseline preserved)</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
@@ -101,14 +94,32 @@
 
     if (!text) return { drafts, web };
 
-    const urlRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
-    const matches = text.match(urlRegex) || [];
+    // Markdown-style links: [label](url)
+    const markdownRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let match;
 
-    matches.forEach(url => {
+    while ((match = markdownRegex.exec(text)) !== null) {
+      const label = match[1];
+      const url = match[2].replace(/[)\],.]+$/, "");
+
       if (url.startsWith("drafts://")) {
-        drafts.push(url);
+        drafts.push({ label, url });
+      } else if (url.startsWith("http")) {
+        web.push({ label, url });
+      }
+    }
+
+    // Bare URLs (not already captured by markdown)
+    const bareUrlRegex = /\b(drafts:\/\/[^\s<>"]+|https?:\/\/[^\s<>"]+)/gi;
+    const bareMatches = text.match(bareUrlRegex) || [];
+
+    bareMatches.forEach(rawUrl => {
+      const url = rawUrl.replace(/[)\],.]+$/, "");
+
+      if (url.startsWith("drafts://")) {
+        drafts.push({ label: url, url });
       } else {
-        web.push(url);
+        web.push({ label: url, url });
       }
     });
 
@@ -134,25 +145,26 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔑 BASELINE (do not touch):
-    // SDK provides oldest → newest
-    // Reverse ONCE and USE the reversed array
+    // 🔑 BASELINE: SDK provides oldest → newest
+    // Reverse ONCE and USE IT
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
+      const author = msg.author?.name || "Unknown sender";
+      const body = msg.text || msg.body || "";
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const { drafts, web } = extractLinksFromText(msg.body);
+      const { drafts, web } = extractLinksFromText(body);
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
 
       msgDiv.innerHTML = `
         <div class="muted">
-          Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
+          Message ${labelNumber} · ${author}
         </div>
         <div>
           <a href="${msgUrl}" target="_blank">
@@ -161,26 +173,35 @@
         </div>
       `;
 
-      if (drafts.length > 0) {
-        const d = document.createElement("details");
-        d.innerHTML = `
-          <summary>Drafts links (${drafts.length})</summary>
-          <div class="links">
-            ${drafts.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")}
-          </div>
+      if (drafts.length || web.length) {
+        const details = document.createElement("details");
+        details.innerHTML = `
+          <summary>Links (${drafts.length + web.length})</summary>
         `;
-        msgDiv.appendChild(d);
-      }
 
-      if (web.length > 0) {
-        const d = document.createElement("details");
-        d.innerHTML = `
-          <summary>Web links (${web.length})</summary>
-          <div class="links">
-            ${web.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")}
-          </div>
-        `;
-        msgDiv.appendChild(d);
+        if (drafts.length) {
+          const ul = document.createElement("ul");
+          drafts.forEach(l => {
+            const li = document.createElement("li");
+            li.innerHTML = `<a href="${l.url}">${l.label}</a>`;
+            ul.appendChild(li);
+          });
+          details.appendChild(document.createTextNode("Drafts links:"));
+          details.appendChild(ul);
+        }
+
+        if (web.length) {
+          const ul = document.createElement("ul");
+          web.forEach(l => {
+            const li = document.createElement("li");
+            li.innerHTML = `<a href="${l.url}" target="_blank">${l.label}</a>`;
+            ul.appendChild(li);
+          });
+          details.appendChild(document.createTextNode("Web links:"));
+          details.appendChild(ul);
+        }
+
+        msgDiv.appendChild(details);
       }
 
       messagesEl.appendChild(msgDiv);
