@@ -83,7 +83,12 @@
     const totalMessages = conversation.messages_count;
 
     // ✅ CORRECT: messages are already newest → oldest
-    const displayMessages = conversation.messages;
+    const messages = [...conversation.messages].sort((a, b) => {
+  const ta = new Date(a.created_at || a.sent_at || 0).getTime();
+  const tb = new Date(b.created_at || b.sent_at || 0).getTime();
+  return tb - ta; // newest → oldest
+});
+
 
     displayMessages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
