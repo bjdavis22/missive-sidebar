@@ -68,8 +68,7 @@
     const convoUrl =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
-    const convoLink = document.getElementById("conversationLink");
-    convoLink.href = convoUrl;
+    document.getElementById("conversationLink").href = convoUrl;
 
     document.getElementById("payload").textContent =
       JSON.stringify(conversation, null, 2);
@@ -83,8 +82,9 @@
       return;
     }
 
-    // Oldest → newest
+    // Keep order AS-IS (top = most recent)
     const messages = [...conversation.messages].reverse();
+    const total = messages.length;
 
     messages.forEach((msg, index) => {
       const msgDiv = document.createElement("div");
@@ -93,9 +93,11 @@
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
+      const labelNumber = total - index;
+
       msgDiv.innerHTML = `
         <div class="muted">
-          Message ${index + 1} · ${msg.author?.name || "Unknown sender"}
+          Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
         </div>
         <div>
           <a href="${msgUrl}" target="_blank">
@@ -122,5 +124,3 @@
 
 </body>
 </html>
-
-
