@@ -18,8 +18,8 @@
     .muted { font-size: 12px; color: #666; }
     .message {
       border-top: 1px solid #eee;
-      padding-top: 8px;
-      margin-top: 8px;
+      padding-top: 6px;
+      margin-top: 6px;
     }
     a {
       color: #2563eb;
@@ -56,6 +56,7 @@
       margin-left: 6px;
       color: #374151;
     }
+
     pre {
       background: #f6f8fa;
       padding: 8px;
@@ -83,7 +84,9 @@
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (baseline preserved)</div>
+<div class="muted">
+  Newest → Oldest (assumes SDK provides oldest → newest)
+</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
@@ -91,21 +94,20 @@
 
 <script>
   function extractLinks(text = "") {
-    const urls = new Set();
+    const links = new Set();
 
-    // HTTP / HTTPS
-    const httpRegex = /\bhttps?:\/\/[^\s<>"')]+/gi;
-    (text.match(httpRegex) || []).forEach(u => urls.add(u));
+    const http = /\bhttps?:\/\/[^\s<>"')]+/gi;
+    const drafts = /\bdrafts:\/\/[^\s<>"')]+|\[Drafts\]\([^)]+\)/gi;
 
-    // Missive drafts (callback or drafts://)
-    const draftRegex = /\bdrafts:\/\/[^\s<>"')]+|\[Drafts\]\([^)]+\)/gi;
-    (text.match(draftRegex) || []).forEach(u => urls.add(u));
+    (text.match(http) || []).forEach(l => links.add(l));
+    (text.match(drafts) || []).forEach(l => links.add(l));
 
-    return [...urls];
+    return [...links];
   }
 
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
+
     document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
 
@@ -122,8 +124,8 @@
 
     const totalMessages = conversation.messages_count;
 
-    // ✅ BASELINE — DO NOT TOUCH (this is the working order)
-    const displayMessages = [...conversation.messages];
+    // 🔒 BASELINE — DO NOT TOUCH
+    const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
