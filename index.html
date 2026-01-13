@@ -21,12 +21,18 @@
       padding-top: 6px;
       margin-top: 6px;
     }
-    a {
+    .links {
+      margin-top: 4px;
+      padding-left: 12px;
+    }
+    .links a {
+      display: block;
+      font-size: 12px;
       color: #2563eb;
       text-decoration: none;
-      font-size: 13px;
+      word-break: break-all;
     }
-    a:hover { text-decoration: underline; }
+    .links a:hover { text-decoration: underline; }
     pre {
       background: #f6f8fa;
       padding: 8px;
@@ -55,7 +61,7 @@
 
 <h2>Missive Messages</h2>
 <div class="muted">
-  Newest → Oldest (assumes SDK provides oldest → newest)
+  Newest → Oldest (baseline preserved)
 </div>
 <div id="messages">Waiting…</div>
 
@@ -63,6 +69,12 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
+  function extractLinks(text) {
+    if (!text) return [];
+    const urlRegex = /https?:\/\/[^\s<>"']+/gi;
+    return Array.from(new Set(text.match(urlRegex) || []));
+  }
+
   function updateConversation(conversation) {
     document.getElementById("conversationId").textContent = conversation.id;
 
@@ -82,16 +94,23 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔑 OPTION 1:
-    // Assume SDK gives messages oldest → newest
-    // Reverse once to get newest → oldest
-    const displayMessages = [...conversation.messages].reverse();
+    // 🔒 BASELINE: newest → oldest (derived from timestamps)
+    const messages = [...conversation.messages].sort((a, b) => {
+      const ta = new Date(a.created_at || a.sent_at || 0).getTime();
+      const tb = new Date(b.created_at || b.sent_at || 0).getTime();
+      return tb - ta;
+    });
 
-    displayMessages.forEach((msg, index) => {
+    messages.forEach((msg, index) => {
       const labelNumber = totalMessages - index;
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
+
+      const content =
+        msg.body || msg.text || msg.preview || "";
+
+      const links = extractLinks(content);
 
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
@@ -104,6 +123,13 @@
           <a href="${msgUrl}" target="_blank">
             Open message in Missive →
           </a>
+        </div>
+        <div class="links">
+          ${
+            links.length
+              ? links.map(l => `<a href="${l}" target="_blank">${l}</a>`).join("")
+              : `<div class="muted">No links found</div>`
+          }
         </div>
       `;
 
