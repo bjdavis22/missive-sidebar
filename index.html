@@ -38,7 +38,7 @@
       padding-left: 16px;
     }
 
-    li { margin-bottom: 4px; }
+    li { margin-bottom: 6px; }
 
     a {
       color: #2563eb;
@@ -63,7 +63,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Baseline ordering preserved · iframe-safe app links</div>
+<div class="muted">Baseline ordering preserved · safe link handling</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -76,7 +76,7 @@
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (baseline preserved)</div>
+<div class="muted">Newest → Oldest</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
@@ -90,36 +90,31 @@
   function extractLinks(text) {
     const drafts = [];
     const web = [];
-    const other = [];
 
-    if (!text) return { drafts, web, other };
+    if (!text) return { drafts, web };
 
     // Markdown links
     const md = /\[([^\]]+)\]\(([^)\s]+)\)/g;
     let match;
-
     while ((match = md.exec(text)) !== null) {
       const label = match[1];
       const url = cleanUrl(match[2]);
-
       if (url.startsWith("drafts://")) drafts.push({ label, url });
       else if (url.startsWith("http")) web.push({ label, url });
-      else other.push({ label, url });
     }
 
-    // Bare URLs fallback
+    // Bare URLs
     const bare = /\b([a-z][a-z0-9+\-.]*:\/\/[^\s<>"]+)/gi;
     (text.match(bare) || []).forEach(raw => {
       const url = cleanUrl(raw);
       if (url.startsWith("drafts://")) drafts.push({ label: url, url });
       else if (url.startsWith("http")) web.push({ label: url, url });
-      else other.push({ label: url, url });
     });
 
-    return { drafts, web, other };
+    return { drafts, web };
   }
 
-  function renderLinkToggle(title, links, target) {
+  function renderToggle(title, links) {
     if (!links.length) return null;
 
     const details = document.createElement("details");
@@ -130,7 +125,7 @@
     const ul = document.createElement("ul");
     links.forEach(l => {
       const li = document.createElement("li");
-      li.innerHTML = `<a href="${l.url}" ${target}>${l.label}</a>`;
+      li.innerHTML = `<a href="${l.url}">${l.label}</a>`;
       ul.appendChild(li);
     });
 
@@ -149,48 +144,35 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
-    if (!conversation.messages?.length) {
-      messagesEl.textContent = "No messages provided by SDK.";
-      return;
-    }
-
     const total = conversation.messages_count;
+    const ordered = [...conversation.messages].reverse(); // baseline
 
-    // 🔑 BASELINE — unchanged
-    const displayMessages = [...conversation.messages].reverse();
-
-    displayMessages.forEach((msg, index) => {
-      const number = total - index;
-      const author = msg.author?.name || "Unknown sender";
-      const body = msg.text || msg.body || "";
-
+    ordered.forEach((msg, index) => {
       const msgDiv = document.createElement("div");
       msgDiv.className = "message";
-      msgDiv.innerHTML = `<div class="muted">Message ${number} · ${author}</div>`;
 
-      const { drafts, web, other } = extractLinks(body);
+      const msgUrl =
+        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
 
-      const draftsToggle = renderLinkToggle(
-        "Drafts / App links",
-        drafts,
-        'target="_top"'
-      );
+      msgDiv.innerHTML = `
+        <div class="muted">
+          Message ${total - index} · ${msg.author?.name || "Unknown sender"}
+        </div>
+        <div>
+          <a href="${msgUrl}" target="_blank">
+            Open message in Missive →
+          </a>
+        </div>
+      `;
 
-      const webToggle = renderLinkToggle(
-        "Web links",
-        web,
-        'target="_blank"'
-      );
+      const body = msg.text || msg.body || "";
+      const { drafts, web } = extractLinks(body);
 
-      const otherToggle = renderLinkToggle(
-        "Other scheme links",
-        other,
-        'target="_top"'
-      );
+      const draftsToggle = renderToggle("Drafts / App links", drafts);
+      const webToggle = renderToggle("Web links", web);
 
-      [draftsToggle, webToggle, otherToggle]
-        .filter(Boolean)
-        .forEach(t => msgDiv.appendChild(t));
+      if (draftsToggle) msgDiv.appendChild(draftsToggle);
+      if (webToggle) msgDiv.appendChild(webToggle);
 
       messagesEl.appendChild(msgDiv);
     });
@@ -200,7 +182,7 @@
     if (!ids?.length) return;
 
     Missive.fetchConversations(ids, { messages: true })
-      .then(convos => convos[0] && updateConversation(convos[0]));
+      .then(c => c[0] && updateConversation(c[0]));
   });
 </script>
 
