@@ -5,7 +5,6 @@
   <title>Missive Sidebar Integration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Missive iframe SDK -->
   <script src="https://integrations.missiveapp.com/missive.js"></script>
 
   <style>
@@ -91,12 +90,11 @@
       const list = document.getElementById("messages");
       list.innerHTML = "";
 
-      if (!messages || messages.length === 0) {
+      if (!Array.isArray(messages) || messages.length === 0) {
         list.innerHTML = "<li>No messages found.</li>";
         return;
       }
 
-      // Oldest → newest
       messages
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
         .forEach((msg, index) => {
@@ -105,7 +103,7 @@
           const link = document.createElement("a");
           link.href =
             `https://mail.missiveapp.com/#inbox/conversations/${conversationId}/messages/${msg.id}`;
-          link.target = "_self"; // IMPORTANT: scrolls instead of popup
+          link.target = "_self";
           link.textContent = `Message ${index + 1}`;
 
           li.appendChild(link);
@@ -121,7 +119,7 @@
       document.getElementById("messages").innerHTML =
         "<li>Loading messages…</li>";
 
-      // Fetch conversation for debug
+      // Debug: fetch conversation metadata
       Missive.fetchConversations([conversationId]).then((conversations) => {
         if (conversations && conversations[0]) {
           document.getElementById("debug").textContent =
@@ -129,8 +127,10 @@
         }
       });
 
-      // Fetch ALL messages (not limited to 5)
-      Missive.fetchMessages(conversationId).then((messages) => {
+      // ✅ CORRECT message fetch
+      Missive.fetchMessages({
+        conversation: conversationId
+      }).then((messages) => {
         renderMessages(conversationId, messages);
       });
     });
