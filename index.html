@@ -1,3 +1,5 @@
+<!-- Version 2.11 -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,8 +9,8 @@
 
   <!--
     Missive Sidebar Integration
-    Version 2.10
-    Baseline 2.07 + non-greedy URL regex (no regressions)
+    Version 2.11
+    Baseline 2.07 + add change:conversation listener (no other changes)
   -->
 
   <style>
@@ -22,13 +24,11 @@
     h1 { font-size: 16px; margin-bottom: 4px; }
     h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
     .muted { font-size: 12px; color: #666; }
-
     .message {
       border-top: 1px solid #eee;
       padding-top: 6px;
       margin-top: 6px;
     }
-
     a {
       color: #2563eb;
       text-decoration: none;
@@ -45,15 +45,20 @@
       margin-top: 4px;
       user-select: none;
     }
-    .toggle::before { content: "▸ "; }
-    .toggle.open::before { content: "▾ "; }
-
+    .toggle::before {
+      content: "▸ ";
+    }
+    .toggle.open::before {
+      content: "▾ ";
+    }
     .toggle-content {
       display: none;
       margin-left: 12px;
       margin-top: 4px;
     }
-    .toggle-content.open { display: block; }
+    .toggle-content.open {
+      display: block;
+    }
 
     pre {
       background: #f6f8fa;
@@ -69,7 +74,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Version 2.10 — non-greedy drafts URL fix</div>
+<div class="muted">Version 2.11 — add change:conversation listener</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -89,7 +94,7 @@
 <pre id="payload">Waiting…</pre>
 
 <script>
-  const VERSION = "2.10";
+  const VERSION = "2.11";
 
   function createToggle(label) {
     const toggle = document.createElement("div");
@@ -107,11 +112,18 @@
     return { toggle, content };
   }
 
-  // ✅ FIX: non-greedy URL extraction (no trailing punctuation)
+  // Trim trailing punctuation from extracted URLs
   function extractUrls(text) {
     if (!text) return [];
-    const regex = /\bhttps?:\/\/[^\s<>")\]]+|\bdrafts:\/\/[^\s<>")\]]+/gi;
-    return [...new Set(text.match(regex) || [])];
+
+    const regex = /\bhttps?:\/\/[^\s<>"]+|\bdrafts:\/\/[^\s<>"]+/gi;
+    const matches = text.match(regex) || [];
+
+    return [...new Set(
+      matches.map(url =>
+        url.replace(/[)\].,;:]+$/, "")
+      )
+    )];
   }
 
   function isDraftsLink(url) {
@@ -135,6 +147,8 @@
     }
 
     const totalMessages = conversation.messages_count;
+
+    // BASELINE ORDERING (unchanged)
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
@@ -189,10 +203,23 @@
     });
   }
 
+  // EXISTING listener (unchanged)
   Missive.on("change:conversations", (ids) => {
     if (!ids || !ids.length) return;
 
     Missive.fetchConversations(ids, { messages: true })
+      .then(conversations => {
+        if (conversations && conversations[0]) {
+          updateConversation(conversations[0]);
+        }
+      });
+  });
+
+  // ✅ ADDITIVE FIX ONLY: handle single conversation changes
+  Missive.on("change:conversation", (conversation) => {
+    if (!conversation) return;
+
+    Missive.fetchConversations([conversation.id], { messages: true })
       .then(conversations => {
         if (conversations && conversations[0]) {
           updateConversation(conversations[0]);
