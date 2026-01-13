@@ -55,7 +55,7 @@
 
 <h2>Missive Messages</h2>
 <div class="muted">
-  Links open the conversation context. Message focus is not supported by the SDK.
+  Newest → Oldest (correct chronological order)
 </div>
 <div id="messages">Waiting…</div>
 
@@ -64,7 +64,6 @@
 
 <script>
   function updateConversation(conversation) {
-    // Conversation
     document.getElementById("conversationId").textContent = conversation.id;
 
     document.getElementById("conversationLink").href =
@@ -73,7 +72,6 @@
     document.getElementById("payload").textContent =
       JSON.stringify(conversation, null, 2);
 
-    // Messages
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
@@ -84,7 +82,7 @@
 
     const totalMessages = conversation.messages_count;
 
-    // 🔑 FIX: display newest → oldest
+    // ✅ CORRECT: messages are already newest → oldest
     const displayMessages = conversation.messages;
 
     displayMessages.forEach((msg, index) => {
