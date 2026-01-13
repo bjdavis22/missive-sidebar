@@ -1,219 +1,122 @@
-<!-- Version 2.07 -->
+/**
+ * Missive Sidebar Integration
+ * Version 2.08 — conversation links restored
+ */
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Missive Sidebar Integration</title>
-  <script src="https://integrations.missiveapp.com/missive.js"></script>
+const APP_NAME = "Links";
 
-  <!--
-    Missive Sidebar Integration
-    Version 2.07
-    Baseline 2.02 + fix greedy Drafts URL regex
-  -->
+/* ---------- URL extraction ---------- */
 
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 12px;
-      margin: 0;
-      font-size: 14px;
-      color: #111;
-    }
-    h1 { font-size: 16px; margin-bottom: 4px; }
-    h2 { font-size: 14px; margin-top: 16px; margin-bottom: 6px; }
-    .muted { font-size: 12px; color: #666; }
-    .message {
-      border-top: 1px solid #eee;
-      padding-top: 6px;
-      margin-top: 6px;
-    }
-    a {
-      color: #2563eb;
-      text-decoration: none;
-      font-size: 13px;
-      display: block;
-      margin: 2px 0;
-    }
-    a:hover { text-decoration: underline; }
+function extractUrls(text) {
+  if (!text) return [];
 
-    .toggle {
-      cursor: pointer;
-      font-size: 12px;
-      color: #444;
-      margin-top: 4px;
-      user-select: none;
-    }
-    .toggle::before {
-      content: "▸ ";
-    }
-    .toggle.open::before {
-      content: "▾ ";
-    }
-    .toggle-content {
-      display: none;
-      margin-left: 12px;
-      margin-top: 4px;
-    }
-    .toggle-content.open {
-      display: block;
-    }
+  const urlRegex =
+    /\bhttps?:\/\/[^\s<>"')\]]+/gi;
 
-    pre {
-      background: #f6f8fa;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      max-height: 200px;
-      overflow: auto;
-    }
-  </style>
-</head>
+  return text.match(urlRegex) || [];
+}
 
-<body>
+function isDraftsUrl(url) {
+  return url.startsWith("drafts://");
+}
 
-<h1>Missive Sidebar Integration</h1>
-<div class="muted">Version 2.07 — drafts URL punctuation fix</div>
+/* ---------- Rendering helpers ---------- */
 
-<h2>Conversation</h2>
-<div class="message">
-  <div><strong>ID:</strong> <span id="conversationId">—</span></div>
-  <div>
-    <a id="conversationLink" href="#" target="_blank" rel="noopener">
-      Open conversation in Missive →
-    </a>
-  </div>
-</div>
+function renderLinksSection(title, links) {
+  if (!links.length) return "";
 
-<h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (baseline preserved)</div>
-<div id="messages">Waiting…</div>
+  const items = links
+    .map(
+      (url) =>
+        `<li><a href="${url}" target="_blank">${url}</a></li>`
+    )
+    .join("");
 
-<h2>Raw payload (debug)</h2>
-<pre id="payload">Waiting…</pre>
+  return `
+    <details open>
+      <summary><strong>${title}</strong></summary>
+      <ul>${items}</ul>
+    </details>
+  `;
+}
 
-<script>
-  const VERSION = "2.07";
+/* ---------- Core renderer ---------- */
 
-  function createToggle(label) {
-    const toggle = document.createElement("div");
-    toggle.className = "toggle";
-    toggle.textContent = label;
+function renderSidebar(data) {
+  const conversation = data.conversation;
+  const messages = data.messages || [];
 
-    const content = document.createElement("div");
-    content.className = "toggle-content";
+  /* ----- Conversation-level aggregation ----- */
 
-    toggle.addEventListener("click", () => {
-      toggle.classList.toggle("open");
-      content.classList.toggle("open");
-    });
+  const conversationUrls = new Set();
 
-    return { toggle, content };
-  }
-
-  // 🔧 FIX: trim trailing punctuation from extracted URLs
-  function extractUrls(text) {
-    if (!text) return [];
-
-    const regex = /\bhttps?:\/\/[^\s<>"]+|\bdrafts:\/\/[^\s<>"]+/gi;
-    const matches = text.match(regex) || [];
-
-    return [...new Set(
-      matches.map(url =>
-        url.replace(/[)\].,;:]+$/, "")
-      )
-    )];
-  }
-
-  function isDraftsLink(url) {
-    return url.startsWith("drafts://") || url.includes("drafts/x-callback-url");
-  }
-
-  function updateConversation(conversation) {
-    document.getElementById("conversationId").textContent = conversation.id;
-    document.getElementById("conversationLink").href =
-      `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
-
-    document.getElementById("payload").textContent =
-      JSON.stringify(conversation, null, 2);
-
-    const messagesEl = document.getElementById("messages");
-    messagesEl.innerHTML = "";
-
-    if (!Array.isArray(conversation.messages) || !conversation.messages.length) {
-      messagesEl.textContent = "No messages provided by SDK.";
-      return;
-    }
-
-    const totalMessages = conversation.messages_count;
-
-    // 🔑 BASELINE ORDERING (unchanged)
-    const displayMessages = [...conversation.messages].reverse();
-
-    displayMessages.forEach((msg, index) => {
-      const msgDiv = document.createElement("div");
-      msgDiv.className = "message";
-
-      const labelNumber = totalMessages - index;
-      const msgUrl =
-        `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
-
-      msgDiv.innerHTML = `
-        <div class="muted">
-          Message ${labelNumber} · ${msg.author?.name || "Unknown sender"}
-        </div>
-        <a href="${msgUrl}" target="_blank" rel="noopener">
-          Open message in Missive →
-        </a>
-      `;
-
-      const urls = extractUrls(msg.body || msg.preview || "");
-
-      if (urls.length) {
-        const draftsToggle = createToggle("Drafts / App links");
-        const webToggle = createToggle("Web links");
-
-        urls.forEach(url => {
-          const link = document.createElement("a");
-          link.href = url;
-          link.textContent = url;
-          link.target = "_blank";
-          link.rel = "noopener";
-
-          if (isDraftsLink(url)) {
-            draftsToggle.content.appendChild(link);
-          } else {
-            webToggle.content.appendChild(link);
-          }
-        });
-
-        if (draftsToggle.content.children.length) {
-          msgDiv.appendChild(draftsToggle.toggle);
-          msgDiv.appendChild(draftsToggle.content);
-        }
-
-        if (webToggle.content.children.length) {
-          msgDiv.appendChild(webToggle.toggle);
-          msgDiv.appendChild(webToggle.content);
-        }
-      }
-
-      messagesEl.appendChild(msgDiv);
-    });
-  }
-
-  Missive.on("change:conversations", (ids) => {
-    if (!ids || !ids.length) return;
-
-    Missive.fetchConversations(ids, { messages: true })
-      .then(conversations => {
-        if (conversations && conversations[0]) {
-          updateConversation(conversations[0]);
-        }
-      });
+  messages.forEach((msg) => {
+    extractUrls(msg.body || "").forEach((url) =>
+      conversationUrls.add(url)
+    );
   });
-</script>
 
-</body>
-</html>
+  const conversationDrafts = [];
+  const conversationWeb = [];
+
+  [...conversationUrls].forEach((url) => {
+    if (isDraftsUrl(url)) {
+      conversationDrafts.push(url);
+    } else {
+      conversationWeb.push(url);
+    }
+  });
+
+  /* ----- Message-level rendering ----- */
+
+  const messageSections = messages
+    .map((msg, index) => {
+      const urls = extractUrls(msg.body || []);
+      if (!urls.length) return "";
+
+      const drafts = urls.filter(isDraftsUrl);
+      const web = urls.filter((u) => !isDraftsUrl(u));
+
+      return `
+        <details>
+          <summary>
+            Message ${index + 1} — ${msg.author?.name || "Unknown sender"}
+          </summary>
+          ${renderLinksSection("Drafts / App links", drafts)}
+          ${renderLinksSection("Web links", web)}
+        </details>
+      `;
+    })
+    .join("");
+
+  /* ----- Final HTML ----- */
+
+  return `
+    <div>
+      <h2>Missive Sidebar Integration</h2>
+      <p><em>Version 2.08 — conversation links restored</em></p>
+
+      <details open>
+        <summary><strong>Conversation</strong></summary>
+        <p>
+          <a href="${conversation.link}" target="_blank">
+            Open conversation in Missive
+          </a>
+        </p>
+        ${renderLinksSection("Drafts / App links", conversationDrafts)}
+        ${renderLinksSection("Web links", conversationWeb)}
+      </details>
+
+      <hr />
+
+      <details open>
+        <summary><strong>Missive Messages</strong></summary>
+        ${messageSections || "<p>No links found.</p>"}
+      </details>
+    </div>
+  `;
+}
+
+/* ---------- Missive hook ---------- */
+
+Missive.renderSidebar(renderSidebar);
