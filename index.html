@@ -1,3 +1,5 @@
+<!-- Version 2.07 -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,9 +9,8 @@
 
   <!--
     Missive Sidebar Integration
-    Version 2.06
-    Based on 2.02
-    Adds: conversation-level link aggregation (web + drafts)
+    Version 2.07
+    Baseline 2.02 + fix greedy Drafts URL regex
   -->
 
   <style>
@@ -34,7 +35,6 @@
       font-size: 13px;
       display: block;
       margin: 2px 0;
-      word-break: break-all;
     }
     a:hover { text-decoration: underline; }
 
@@ -45,15 +45,20 @@
       margin-top: 4px;
       user-select: none;
     }
-    .toggle::before { content: "▸ "; }
-    .toggle.open::before { content: "▾ "; }
-
+    .toggle::before {
+      content: "▸ ";
+    }
+    .toggle.open::before {
+      content: "▾ ";
+    }
     .toggle-content {
       display: none;
       margin-left: 12px;
       margin-top: 4px;
     }
-    .toggle-content.open { display: block; }
+    .toggle-content.open {
+      display: block;
+    }
 
     pre {
       background: #f6f8fa;
@@ -69,7 +74,7 @@
 <body>
 
 <h1>Missive Sidebar Integration</h1>
-<div class="muted">Version 2.06 — conversation links + drafts restored</div>
+<div class="muted">Version 2.07 — drafts URL punctuation fix</div>
 
 <h2>Conversation</h2>
 <div class="message">
@@ -79,19 +84,17 @@
       Open conversation in Missive →
     </a>
   </div>
-
-  <div id="conversationLinks"></div>
 </div>
 
 <h2>Missive Messages</h2>
-<div class="muted">Newest → Oldest (ordering preserved)</div>
+<div class="muted">Newest → Oldest (baseline preserved)</div>
 <div id="messages">Waiting…</div>
 
 <h2>Raw payload (debug)</h2>
 <pre id="payload">Waiting…</pre>
 
 <script>
-  const VERSION = "2.06";
+  const VERSION = "2.07";
 
   function createToggle(label) {
     const toggle = document.createElement("div");
@@ -109,10 +112,18 @@
     return { toggle, content };
   }
 
+  // 🔧 FIX: trim trailing punctuation from extracted URLs
   function extractUrls(text) {
     if (!text) return [];
+
     const regex = /\bhttps?:\/\/[^\s<>"]+|\bdrafts:\/\/[^\s<>"]+/gi;
-    return [...new Set(text.match(regex) || [])];
+    const matches = text.match(regex) || [];
+
+    return [...new Set(
+      matches.map(url =>
+        url.replace(/[)\].,;:]+$/, "")
+      )
+    )];
   }
 
   function isDraftsLink(url) {
@@ -130,9 +141,6 @@
     const messagesEl = document.getElementById("messages");
     messagesEl.innerHTML = "";
 
-    const convoLinksEl = document.getElementById("conversationLinks");
-    convoLinksEl.innerHTML = "";
-
     if (!Array.isArray(conversation.messages) || !conversation.messages.length) {
       messagesEl.textContent = "No messages provided by SDK.";
       return;
@@ -140,52 +148,7 @@
 
     const totalMessages = conversation.messages_count;
 
-    // -------- Conversation-level aggregation --------
-    const convoDrafts = new Set();
-    const convoWeb = new Set();
-
-    conversation.messages.forEach(msg => {
-      const urls = extractUrls(msg.body || msg.preview || "");
-      urls.forEach(url => {
-        if (isDraftsLink(url)) {
-          convoDrafts.add(url);
-        } else {
-          convoWeb.add(url);
-        }
-      });
-    });
-
-    if (convoDrafts.size || convoWeb.size) {
-      if (convoDrafts.size) {
-        const t = createToggle("Drafts / App links");
-        convoDrafts.forEach(url => {
-          const a = document.createElement("a");
-          a.href = url;
-          a.textContent = url;
-          a.target = "_blank";
-          a.rel = "noopener";
-          t.content.appendChild(a);
-        });
-        convoLinksEl.appendChild(t.toggle);
-        convoLinksEl.appendChild(t.content);
-      }
-
-      if (convoWeb.size) {
-        const t = createToggle("Web links");
-        convoWeb.forEach(url => {
-          const a = document.createElement("a");
-          a.href = url;
-          a.textContent = url;
-          a.target = "_blank";
-          a.rel = "noopener";
-          t.content.appendChild(a);
-        });
-        convoLinksEl.appendChild(t.toggle);
-        convoLinksEl.appendChild(t.content);
-      }
-    }
-
-    // -------- Message rendering (unchanged from 2.02) --------
+    // 🔑 BASELINE ORDERING (unchanged)
     const displayMessages = [...conversation.messages].reverse();
 
     displayMessages.forEach((msg, index) => {
