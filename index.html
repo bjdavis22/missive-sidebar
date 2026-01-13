@@ -64,13 +64,11 @@
 
 <script>
   function updateConversation(conversation) {
-    // Conversation info
+    // Conversation
     document.getElementById("conversationId").textContent = conversation.id;
 
-    const convoUrl =
+    document.getElementById("conversationLink").href =
       `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}`;
-
-    document.getElementById("conversationLink").href = convoUrl;
 
     document.getElementById("payload").textContent =
       JSON.stringify(conversation, null, 2);
@@ -86,15 +84,17 @@
 
     const totalMessages = conversation.messages_count;
 
-    // KEEP ORDER AS-IS (newest → oldest as provided by SDK)
-    conversation.messages.forEach((msg, index) => {
-      const labelNumber = totalMessages - index;
+    // 🔑 FIX: display newest → oldest
+    const displayMessages = [...conversation.messages].reverse();
 
-      const msgDiv = document.createElement("div");
-      msgDiv.className = "message";
+    displayMessages.forEach((msg, index) => {
+      const labelNumber = totalMessages - index;
 
       const msgUrl =
         `https://mail.missiveapp.com/#/inbox/conversations/${conversation.id}/messages/${msg.id}`;
+
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message";
 
       msgDiv.innerHTML = `
         <div class="muted">
