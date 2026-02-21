@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Monty Hall Game</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 16px;
+      margin: 0;
+      font-size: 14px;
+      color: #111;
+    }
+    h1 { font-size: 16px; margin-bottom: 4px; }
+    .muted { font-size: 12px; color: #666; }
+
+    #mh-doors {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .mh-door {
+      flex: 1;
+      padding: 12px 4px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      background: #f6f8fa;
+      cursor: pointer;
+      text-align: center;
+      font-size: 11px;
+      color: #374151;
+      font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-height: 72px;
+      justify-content: center;
+    }
+    .mh-door:hover:not(:disabled) {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .mh-door.selected {
+      border-color: #2563eb;
+      background: #dbeafe;
+    }
+    .mh-door.revealed {
+      border-color: #e5e7eb;
+      background: #f9fafb;
+      color: #9ca3af;
+    }
+    .mh-door.winner {
+      border-color: #16a34a;
+      background: #dcfce7;
+    }
+    .mh-door .mh-icon { font-size: 22px; }
+    .mh-door:disabled { cursor: default; }
+
+    #mh-action-btns {
+      display: flex;
+      gap: 6px;
+      margin: 6px 0;
+    }
+    .mh-btn {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      transition: background 0.1s;
+    }
+    .mh-btn:hover { background: #f3f4f6; }
+    .mh-btn.primary {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+    .mh-btn.primary:hover { background: #1d4ed8; }
+
+    #mh-result {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 6px 0 4px;
+    }
+    #mh-result.win  { color: #16a34a; }
+    #mh-result.lose { color: #dc2626; }
+
+    #mh-stats {
+      border-top: 1px solid #eee;
+      margin-top: 10px;
+      padding-top: 8px;
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+    #mh-explainer {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Monty Hall Game</h1>
+
+<p id="mh-status" class="muted">Pick a door — a car is behind one of them!</p>
+
+<div id="mh-doors"></div>
+
+<div id="mh-action-btns" style="display:none">
+  <button class="mh-btn" id="mh-stay-btn">Stay</button>
+  <button class="mh-btn primary" id="mh-switch-btn">Switch</button>
+</div>
+
+<div id="mh-result"></div>
+
+<button class="mh-btn primary" id="mh-again-btn" style="display:none;width:100%">Play Again</button>
+
+<div id="mh-stats"></div>
+
+<div id="mh-explainer">
+  The Monty Hall problem: switching wins 2/3 of the time; staying wins 1/3.
+</div>
+
+<script>
+  const MH = {
+    state: 'pick',   // 'pick' | 'decide' | 'done'
+    carDoor: null,
+    playerPick: null,
+    revealedDoor: null,
+    finalChoice: null,
+    switched: false,
+    stats: { switchWins: 0, switchLosses: 0, stayWins: 0, stayLosses: 0 },
+
+    init() {
+      this.state = 'pick';
+      this.carDoor = Math.floor(Math.random() * 3);
+      this.playerPick = null;
+      this.revealedDoor = null;
+      this.finalChoice = null;
+      this.switched = false;
+      this.render();
+    },
+
+    pickDoor(door) {
+      if (this.state !== 'pick') return;
+      this.playerPick = door;
+
+      // Monty reveals a goat door that is not the player's pick and not the car
+      const options = [0, 1, 2].filter(d => d !== door && d !== this.carDoor);
+      this.revealedDoor = options[Math.floor(Math.random() * options.length)];
+
+      this.state = 'decide';
+      this.render();
+    },
+
+    decide(action) {
+      if (this.state !== 'decide') return;
+      this.switched = action === 'switch';
+
+      if (action === 'stay') {
+        this.finalChoice = this.playerPick;
+      } else {
+        this.finalChoice = [0, 1, 2].find(d => d !== this.playerPick && d !== this.revealedDoor);
+      }
+
+      const won = this.finalChoice === this.carDoor;
+      if (this.switched) {
+        won ? this.stats.switchWins++ : this.stats.switchLosses++;
+      } else {
+        won ? this.stats.stayWins++ : this.stats.stayLosses++;
+      }
+
+      this.state = 'done';
+      this.render();
+    },
+
+    render() {
+      const statusEl  = document.getElementById('mh-status');
+      const doorsEl   = document.getElementById('mh-doors');
+      const actionsEl = document.getElementById('mh-action-btns');
+      const resultEl  = document.getElementById('mh-result');
+      const againBtn  = document.getElementById('mh-again-btn');
+      const statsEl   = document.getElementById('mh-stats');
+
+      // Status text
+      if (this.state === 'pick') {
+        statusEl.textContent = 'Pick a door — a car is behind one of them!';
+      } else if (this.state === 'decide') {
+        statusEl.textContent = `Door ${this.revealedDoor + 1} has a goat! Switch or stay?`;
+      } else {
+        statusEl.textContent = '';
+      }
+
+      // Doors
+      doorsEl.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'mh-door';
+        btn.disabled = this.state !== 'pick';
+
+        const icon = document.createElement('span');
+        icon.className = 'mh-icon';
+        const lbl = document.createElement('span');
+        lbl.textContent = `Door ${i + 1}`;
+
+        if (this.state === 'pick') {
+          icon.textContent = '🚪';
+          btn.addEventListener('click', () => this.pickDoor(i));
+        } else if (this.state === 'decide') {
+          if (i === this.revealedDoor) {
+            icon.textContent = '🐐';
+            btn.classList.add('revealed');
+          } else {
+            icon.textContent = '🚪';
+            if (i === this.playerPick) btn.classList.add('selected');
+          }
+        } else { // done
+          icon.textContent = i === this.carDoor ? '🚗' : '🐐';
+          if (i === this.finalChoice && i === this.carDoor) btn.classList.add('winner');
+          else if (i === this.finalChoice) btn.classList.add('selected');
+          else if (i === this.revealedDoor) btn.classList.add('revealed');
+        }
+
+        btn.appendChild(icon);
+        btn.appendChild(lbl);
+        doorsEl.appendChild(btn);
+      }
+
+      // Switch / Stay buttons
+      actionsEl.style.display = this.state === 'decide' ? 'flex' : 'none';
+
+      // Result
+      if (this.state === 'done') {
+        const won = this.finalChoice === this.carDoor;
+        resultEl.textContent = won
+          ? `You win the car! (you ${this.switched ? 'switched' : 'stayed'})`
+          : `Goat! (you ${this.switched ? 'switched' : 'stayed'})`;
+        resultEl.className = won ? 'win' : 'lose';
+      } else {
+        resultEl.textContent = '';
+        resultEl.className = '';
+      }
+
+      // Play again
+      againBtn.style.display = this.state === 'done' ? 'block' : 'none';
+
+      // Stats
+      const total = this.stats.switchWins + this.stats.switchLosses
+                  + this.stats.stayWins  + this.stats.stayLosses;
+      if (total > 0) {
+        const sw = this.stats.switchWins, sl = this.stats.switchLosses;
+        const tw = this.stats.stayWins,   tl = this.stats.stayLosses;
+        const swPct = sw + sl ? Math.round(100 * sw / (sw + sl)) : 0;
+        const twPct = tw + tl ? Math.round(100 * tw / (tw + tl)) : 0;
+        statsEl.innerHTML =
+          `<strong>Your stats (${total} game${total > 1 ? 's' : ''})</strong><br>` +
+          `Switch: ${sw}W / ${sl}L &nbsp;(${swPct}% win rate)<br>` +
+          `Stay: &nbsp;${tw}W / ${tl}L &nbsp;(${twPct}% win rate)`;
+      } else {
+        statsEl.innerHTML = '';
+      }
+    }
+  };
+
+  document.getElementById('mh-stay-btn').addEventListener('click',   () => MH.decide('stay'));
+  document.getElementById('mh-switch-btn').addEventListener('click', () => MH.decide('switch'));
+  document.getElementById('mh-again-btn').addEventListener('click',  () => MH.init());
+
+  MH.init();
+</script>
+
+</body>
+</html>
